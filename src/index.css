@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    overscroll-behavior-y: none;
+    font-family: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  }
+}
+
+.font-kai {
+  font-family: "BiauKai", "DFKai-SB", "Kaiti TC", "STKaiti", "TW-Kai", serif;
+}
+
+.zhuyin-text {
+  font-family: "PingFang TC", "Microsoft JhengHei", "BiauKai", sans-serif;
+  letter-spacing: 0.06em;
+}
+
+/* 米字格背景 */
+.mizige-grid {
+  background-color: #fffbeb;
+  background-image:
+    linear-gradient(to right, rgba(239, 68, 68, 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(239, 68, 68, 0.25) 1px, transparent 1px);
+  background-size: 50% 50%;
+  position: relative;
+}

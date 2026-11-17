@@ -58,6 +58,16 @@
 ## AI Agent 交接日誌 (Handoff Log)
 > 每次 Agent 結束工作前，請在下方新增一筆紀錄（由新到舊排列）：
 
+### 2026-11-17 - Arcade Boss Battle & Milestone Progression Upgrade
+- **完成任務**：新增「寶可夢機台風神獸卡匣對戰系統（Boss Arcade Machine）」、「階段里程碑 & 100% 全題庫完全制霸系統」、以及「字音/字形智慧動態配比與專場衝刺機制」
+- **新增/修改檔案**：
+  - `src/types/game.ts` (新增 `BossEnemy`, `MilestoneGoal`, `ElementType` 與 `PlayerProfile` 的 `defeatedBossIds`, `claimedMilestoneIds`, `battleDeckIds`)
+  - `src/data/bosses.ts` (定義五大元素屬性必殺技、卡匣星等 `★1/★3/★5` 戰力表、1.5倍屬性克制計算、Lv.1~Lv.MAX 七大強敵魔王機台、以及 50/150/250/500/750/1000/100% 階段里程碑)
+  - `src/components/ranch/BossArenaModal.tsx` (街機 3 卡槽自由編組介面、一鍵針對魔王弱點配卡、七大魔王排隊挑戰台、階段里程碑領獎與 100% 終極制霸面板)
+  - `src/components/quiz/BossBattleBanner.tsx` (魔王討伐戰頂部即時街機對決螢幕：顯示我方 3 張出戰卡匣、魔王動態血條、屬性克制爆擊傷害廣播)
+  - `src/services/quizEngine.ts` (優化 SRS 抽題演算法確保 100% 優先抽取未測新題 `proficiency === 0` 不鬼打牆；新增 `smart_balanced` 智慧動態調整字音/字形題數比例、`character_focus` 字形手寫雙倍獎勵專場、`pronunciation_focus` 字音極速專場，且字形題答對推進孵蛋進度 +2 步)
+  - `src/components/ranch/RanchDashboard.tsx`, `src/App.tsx` (分開顯示「🔊 字音通關進度」與「✍️ 字形通關進度」，並提供三大練功出擊模式與魔王對戰入口)
+
 ### 2026-11-17 - Full Implementation Agent (Phase 1 ~ Phase 5)
 - **完成任務**：Task 1.1, Task 1.2, Task 2.2, Task 3.1, Task 3.2, Task 3.3, Task 4.1, Task 4.2, Task 5.1, Task 5.2
 - **新增/修改檔案**：

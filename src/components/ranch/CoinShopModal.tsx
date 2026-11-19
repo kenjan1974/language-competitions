@@ -22,15 +22,15 @@ const TICKET_PACKS: ShopPack[] = [
     title: '孵蛋加速券 ×1',
     subtitle: '立即推進單顆蛋 +5 步孵化進度',
     amount: 1,
-    coinCost: 60
+    coinCost: 120
   },
   {
     id: 'ticket_5',
     itemType: 'speedTickets',
     title: '孵蛋加速券 ×5 超值包',
-    subtitle: '平均 50 金幣/張，現省 50 金幣！',
+    subtitle: '平均 110 金幣/張，現省 50 金幣！',
     amount: 5,
-    coinCost: 250,
+    coinCost: 550,
     badge: '超值省 50'
   }
 ];
@@ -42,25 +42,25 @@ const GEM_PACKS: ShopPack[] = [
     title: '璀璨寶石 ×1',
     subtitle: '一點一滴累積星穹神獸基金',
     amount: 1,
-    coinCost: 40
+    coinCost: 80
   },
   {
     id: 'gem_5',
     itemType: 'gems',
     title: '璀璨寶石 ×5 禮包',
-    subtitle: '平均 36 金幣/顆，現省 20 金幣！',
+    subtitle: '平均 76 金幣/顆，現省 20 金幣！',
     amount: 5,
-    coinCost: 180,
+    coinCost: 380,
     badge: '省 20 金幣'
   },
   {
     id: 'gem_12',
     itemType: 'gems',
     title: '星穹抽蛋組 ×12 顆',
-    subtitle: '剛好抽 1 次「星穹聖獸蛋池」，現省 80 金幣！',
+    subtitle: '剛好抽 1 次「星穹聖獸蛋池」，現省 110 金幣！',
     amount: 12,
-    coinCost: 400,
-    badge: '最划算・省 80'
+    coinCost: 850,
+    badge: '最划算・省 110'
   }
 ];
 

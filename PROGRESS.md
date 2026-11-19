@@ -67,7 +67,7 @@
     - 擴充 `ChallengeResultModal` 支援 `boss_battle` 街機魔王討伐成功／殘血逃脫動畫，並以 `bossHpRef` 修正最後一題擊殺魔王時同步結算可能讀到舊血量的問題
   - **修正加速券規則與新增金幣補給站**：
     - 日常挑戰（綜合闖關／字形專場／字音專場）通關成功（`>= 60%`）即必定獲得 `+1` 張孵蛋加速券，高分 3 星（`>= 90%`／滿分）加碼給 `+2` 張；除魔特訓通關 `+1`（75% 以上 `+2`）；魔王機台討伐成功 `+2` 張。
-    - 新增「牧場金幣補給站」(`src/components/ranch/CoinShopModal.tsx`)，可使用金幣購買孵蛋加速券（1 張 60 金幣 / 5 張 250 金幣）與璀璨寶石（1 顆 40 金幣 / 5 顆 180 金幣 / 12 顆 400 金幣）；點擊牧場頂部寶石/加速券徽章、右側「金幣補給站」按鈕、或加速券為 0 時點擊「加速券 +5」皆可直達購買。
+    - 新增「牧場金幣補給站」(`src/components/ranch/CoinShopModal.tsx`)，可使用金幣購買孵蛋加速券（1 張 120 金幣 / 5 張 550 金幣）與璀璨寶石（1 顆 80 金幣 / 5 顆 380 金幣 / 12 顆 850 金幣）；點擊牧場頂部寶石/加速券徽章、右側「金幣補給站」按鈕、或加速券為 0 時點擊「加速券 +5」皆可直達購買。
 - **新增/修改檔案**：
   - 新增 `src/data/bosses.ts`, `src/components/ranch/BossArenaModal.tsx`, `src/components/quiz/BossBattleBanner.tsx`, `src/components/ranch/CoinShopModal.tsx`
   - 修改 `src/types/game.ts`, `src/services/quizEngine.ts`, `src/components/quiz/ChallengeResultModal.tsx`, `src/components/ranch/RanchDashboard.tsx`, `src/App.tsx`, `SPEC.md`, `PROGRESS.md`

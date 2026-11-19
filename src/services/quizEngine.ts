@@ -450,7 +450,7 @@ export async function settleQuizRewards(params: {
   // 加速券發放規則：
   // - 魔王機台討伐成功：+2 張
   // - 除魔特訓通關：75% 以上 +2 張，60% 以上 +1 張
-  // - 日常挑戰（綜合闖關 / 字形專場 / 字音專場）：只要通關成功 (>=60%) 就必定給 1 張，滿分全對加碼給 2 張！
+  // - 日常挑戰（綜合闖關 / 字形專場 / 字音專場）：只要通關成功 (>=60%) 就必定給 1 張，高分 3 星 (>=90%／滿分) 加碼給 2 張！
   const speedTicketsEarned =
     mode === 'boss_battle'
       ? bossDefeated
@@ -464,7 +464,7 @@ export async function settleQuizRewards(params: {
         : 1
       : !passed
       ? 0
-      : correctCount === safeTotal
+      : accuracy >= 90
       ? 2
       : 1;
 

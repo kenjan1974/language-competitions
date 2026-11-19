@@ -20,7 +20,9 @@ import {
   Timer,
   Star,
   Trophy,
-  Flame
+  Flame,
+  ShoppingBag,
+  Plus
 } from 'lucide-react';
 import { db } from '../../db/database';
 import {
@@ -55,6 +57,7 @@ import {
   resolveActiveCompanion
 } from '../../utils/beastPerks';
 import { BeastLevelUpModal } from './BeastLevelUpModal';
+import { CoinShopModal } from './CoinShopModal';
 
 const PET_SPEECH_LINES = [
   '好舒服喔～💕',
@@ -109,6 +112,8 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   const [selectedBeastId, setSelectedBeastId] = useState<string | null>(null);
   const [actionFx, setActionFx] = useState<BeastActionFx | null>(null);
   const [showGachaModal, setShowGachaModal] = useState(false);
+  const [showShopModal, setShowShopModal] = useState(false);
+  const [shopNotice, setShopNotice] = useState<string | null>(null);
   const [showBestiaryModal, setShowBestiaryModal] = useState(false);
   const [newlyHatchedModal, setNewlyHatchedModal] = useState<{
     beast: BeastInstance;
@@ -190,10 +195,16 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     }
   };
 
+  const openCoinShop = (initialNotice: string | null = null) => {
+    sound.playClick();
+    setShopNotice(initialNotice);
+    setShowShopModal(true);
+  };
+
   // 使用孵蛋加速券 (+5 進度)
   const handleUseSpeedTicket = async (egg: BeastInstance) => {
     if (profile.speedTickets <= 0) {
-      showToast('目前沒有孵蛋加速券囉！快去闖關或除魔獲得吧！');
+      openCoinShop('⚡ 加速券用完囉！可以直接用金幣購買孵蛋加速券喔！');
       return;
     }
     sound.playClick();
@@ -393,21 +404,37 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
             <span className="font-extrabold text-amber-900 text-sm">{profile.coins}</span>
             <span className="text-xs text-amber-700">金幣</span>
           </div>
-          <div className="px-3.5 py-1.5 rounded-2xl bg-purple-50 border border-purple-200 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => openCoinShop()}
+            title="點擊用金幣兌換寶石"
+            className="px-3.5 py-1.5 rounded-2xl bg-purple-50 hover:bg-purple-100 border border-purple-200 flex items-center gap-1.5 transition active:scale-95"
+          >
             <Gem className="w-4 h-4 text-purple-500" />
             <span className="font-extrabold text-purple-900 text-sm">{profile.gems}</span>
             <span className="text-xs text-purple-700">寶石</span>
-          </div>
+            <span className="w-4 h-4 rounded-full bg-purple-200 text-purple-800 flex items-center justify-center">
+              <Plus className="w-3 h-3" />
+            </span>
+          </button>
           <div className="px-3.5 py-1.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
             <Sprout className="w-4 h-4 text-emerald-600" />
             <span className="font-extrabold text-emerald-900 text-sm">{profile.forageCount}</span>
             <span className="text-xs text-emerald-700">靈氣牧草</span>
           </div>
-          <div className="px-3.5 py-1.5 rounded-2xl bg-sky-50 border border-sky-200 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => openCoinShop()}
+            title="點擊用金幣購買加速券"
+            className="px-3.5 py-1.5 rounded-2xl bg-sky-50 hover:bg-sky-100 border border-sky-200 flex items-center gap-1.5 transition active:scale-95"
+          >
             <Zap className="w-4 h-4 text-sky-500" />
             <span className="font-extrabold text-sky-900 text-sm">{profile.speedTickets}</span>
             <span className="text-xs text-sky-700">加速券</span>
-          </div>
+            <span className="w-4 h-4 rounded-full bg-sky-200 text-sky-800 flex items-center justify-center">
+              <Plus className="w-3 h-3" />
+            </span>
+          </button>
 
           <button
             type="button"
@@ -623,17 +650,26 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
           </span>
         </button>
 
-        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-1 gap-2">
+        <div className="md:col-span-2 grid grid-cols-3 md:grid-cols-1 gap-1.5">
           <button
             type="button"
             onClick={() => {
               sound.playClick();
               setShowGachaModal(true);
             }}
-            className="p-2.5 rounded-2xl bg-white hover:bg-purple-50/70 border-2 border-purple-200 shadow-sm flex items-center justify-center gap-2 transition active:scale-95"
+            className="p-2 rounded-2xl bg-white hover:bg-purple-50/70 border-2 border-purple-200 shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95"
           >
-            <Gift className="w-4 h-4 text-purple-600" />
+            <Gift className="w-4 h-4 text-purple-600 shrink-0" />
             <span className="font-extrabold text-slate-800 text-xs">神秘抽蛋屋</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCoinShop()}
+            className="p-2 rounded-2xl bg-amber-50 hover:bg-amber-100/80 border-2 border-amber-300 shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95"
+          >
+            <ShoppingBag className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="font-extrabold text-amber-950 text-xs">金幣補給站</span>
           </button>
 
           <button
@@ -642,9 +678,9 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
               sound.playClick();
               setShowBestiaryModal(true);
             }}
-            className="p-2.5 rounded-2xl bg-white hover:bg-sky-50/70 border-2 border-sky-200 shadow-sm flex items-center justify-center gap-2 transition active:scale-95"
+            className="p-2 rounded-2xl bg-white hover:bg-sky-50/70 border-2 border-sky-200 shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95"
           >
-            <Crown className="w-4 h-4 text-sky-600" />
+            <Crown className="w-4 h-4 text-sky-600 shrink-0" />
             <span className="font-extrabold text-slate-800 text-xs">神獸卡匣圖鑑</span>
           </button>
         </div>
@@ -1350,8 +1386,34 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                   </button>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGachaModal(false);
+                  openCoinShop('🪙 可在這裡用金幣兌換璀璨寶石或孵蛋加速券！');
+                }}
+                className="mt-4 w-full py-2.5 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-extrabold text-xs flex items-center justify-center gap-1.5 transition"
+              >
+                <ShoppingBag className="w-4 h-4 text-amber-600" />
+                寶石或加速券不夠？前往「金幣補給站」用金幣兌換 ➔
+              </button>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* 金幣補給站 Modal（購買孵蛋加速券 / 璀璨寶石） */}
+      <AnimatePresence>
+        {showShopModal && (
+          <CoinShopModal
+            profile={profile}
+            initialNotice={shopNotice}
+            onClose={() => {
+              setShowShopModal(false);
+              setShopNotice(null);
+            }}
+          />
         )}
       </AnimatePresence>
 

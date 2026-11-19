@@ -27,11 +27,12 @@ export interface UserQuestionProgress {
 
 export type Rarity = 'N' | 'R' | 'SR' | 'SSR';
 export type BeastStage = 'egg' | 'baby' | 'adult' | 'awakened';
+export type ElementType = 'fire' | 'water' | 'wood' | 'light' | 'star';
 
 export interface BeastSpecies {
   speciesId: string;
   rarity: Rarity;
-  element: 'fire' | 'water' | 'wood' | 'light' | 'star';
+  element: ElementType;
   eggName: string;
   eggStepsRequired: number;    // 孵出所需答對題數
   stages: {
@@ -55,6 +56,38 @@ export interface BeastInstance {
   obtainedAt: number;
 }
 
+export interface BossEnemy {
+  bossId: string;
+  stageOrder: number;
+  name: string;
+  title: string;
+  emoji: string;
+  element: ElementType;
+  weaknessElement: ElementType;
+  requiredMasteredCount: number; // 需熟悉通過幾題才可解鎖挑戰（若題庫較少會自動依比例縮放）
+  requiredCombatPower: number;   // 擊敗首領所需的神獸軍團戰力門檻
+  maxHp: number;                 // 首領血量
+  description: string;
+  tauntQuote: string;            // 首領挑釁台詞（激勵小朋友把神獸進化）
+  rewardCoins: number;
+  rewardGems: number;
+  rewardForage: number;
+  rewardSpeciesId?: string;      // 首次擊敗必定掉落的專屬神獸蛋
+}
+
+export interface MilestoneGoal {
+  milestoneId: string;
+  title: string;
+  badgeEmoji: string;
+  targetCount: number;           // 目標通過題數（例如 50, 150, 250, 500, 750, 1000, 或 -1 代表 100% 全題庫）
+  isFullCompletion?: boolean;    // 是否為 100% 全題庫終極通關目標
+  description: string;
+  rewardCoins: number;
+  rewardGems: number;
+  rewardSpeedTickets: number;
+  unlockSpeciesId?: string;      // 達成里程碑贈送的專屬神獸蛋
+}
+
 export interface PlayerProfile {
   id: 'default_player';
   nickname: string;
@@ -67,5 +100,8 @@ export interface PlayerProfile {
   highCombo: number;
   handwritingMode: 'auto' | 'canvas_only'; // auto: 優先 HanziWriter 盲寫，失敗降級 Canvas; canvas_only: 一律自由手寫翻牌
   soundEnabled: boolean;
-  activeBeastId?: string | null; // 目前設為「出戰夥伴」陪考的神獸 instanceId
+  activeBeastId?: string | null;   // 目前設為「出戰夥伴」陪考的神獸 instanceId
+  defeatedBossIds?: string[];      // 已擊敗的強敵首領 ID 列表
+  claimedMilestoneIds?: string[];  // 已領取獎勵的題庫階段目標 ID 列表
+  battleDeckIds?: string[];        // 玩家編成的 3 張出戰神獸卡匣 instanceId
 }

@@ -13,27 +13,45 @@ import {
   Home,
   Star,
   ShieldAlert,
-  Sparkles
+  Sparkles,
+  Swords
 } from 'lucide-react';
 import { db, initializeDatabase } from './db/database';
-import { BeastSpecies, QuestionItem } from './types/game';
+import {
+  BeastInstance,
+  BeastSpecies,
+  BossEnemy,
+  QuestionItem
+} from './types/game';
 import { BEAST_SPECIES_LIST } from './data/beasts';
+import {
+  ELEMENT_META as BOSS_ELEMENT_META,
+  calculateDeckVsBossPower,
+  getResolvedBattleDeck
+} from './data/bosses';
 import {
   generateStandardQuiz,
   generateSlimeBossQuiz,
+  generateBossBattleQuiz,
   recordQuestionAttempt,
   settleQuizRewards,
   QuizSessionData,
-  QuizRewardSummary
+  QuizRewardSummary,
+  QuizSubMode
 } from './services/quizEngine';
 import {
+  getBeastLevel,
   getRanchMaxAuraSummary,
+  getStageDisplayInfo,
+  getStageForLevel,
   resolveActiveCompanion
 } from './utils/beastPerks';
 import { PronunciationStage } from './components/quiz/PronunciationStage';
 import { CharacterWritingStage } from './components/quiz/CharacterWritingStage';
+import { BossBattleBanner } from './components/quiz/BossBattleBanner';
 import { ChallengeResultModal } from './components/quiz/ChallengeResultModal';
 import { RanchDashboard } from './components/ranch/RanchDashboard';
+import { BossArenaModal } from './components/ranch/BossArenaModal';
 import { MistakeNotebookModal } from './components/ranch/MistakeNotebookModal';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { sound } from './utils/sound';
@@ -60,16 +78,35 @@ export default function App() {
   const [rewardSummary, setRewardSummary] = useState<QuizRewardSummary | null>(null);
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
 
-  // 使用 Ref 同步最新計分，避免最後一題同步結算時讀取到舊的 state
+  // 街機魔王對戰即時狀態
+  const [activeDeck, setActiveDeck] = useState<BeastInstance[]>([]);
+  const [bossCurrentHp, setBossCurrentHp] = useState<number>(0);
+  const [lastAttackLog, setLastAttackLog] = useState<{
+    id: number;
+    attackerName: string;
+    skillName: string;
+    damage: number;
+    isSuperEffective: boolean;
+    isBossCounter?: boolean;
+  } | null>(null);
+
+  // 使用 Ref 同步最新計分與魔王血量，避免最後一題同步結算時讀取到舊的 state
   const comboRef = useRef(0);
   const maxComboRef = useRef(0);
   const correctCountRef = useRef(0);
   const fastBonusCountRef = useRef(0);
+  const eggStepsRef = useRef(0);
   const shieldsRef = useRef(0);
+  const bossHpRef = useRef(0);
+  const turnCounterRef = useRef(0);
   const shieldNoticeTimerRef = useRef<number | null>(null);
 
   const [singlePracticeQuestion, setSinglePracticeQuestion] =
     useState<QuestionItem | null>(null);
+  const [showBossArenaModal, setShowBossArenaModal] = useState(false);
+  const [bossArenaInitialTab, setBossArenaInitialTab] = useState<'bosses' | 'milestones'>(
+    'bosses'
+  );
   const [showNotebookModal, setShowNotebookModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -117,11 +154,27 @@ export default function App() {
   const mistakeCount = progressList.filter((p) => p.proficiency === 1).length;
   const masteredCount = progressList.filter((p) => p.proficiency >= 2).length;
 
-  const resetSessionCounters = () => {
+  const masteredIdSet = new Set(
+    progressList.filter((p) => p.proficiency >= 2).map((p) => p.questionId)
+  );
+  const totalPronCount = questions.filter((q) => q.type === 'pronunciation').length;
+  const masteredPronCount = questions.filter(
+    (q) => q.type === 'pronunciation' && masteredIdSet.has(q.id)
+  ).length;
+  const totalCharCount = questions.filter((q) => q.type === 'character').length;
+  const masteredCharCount = questions.filter(
+    (q) => q.type === 'character' && masteredIdSet.has(q.id)
+  ).length;
+
+  const resetSessionCounters = (initialBossHp: number = 0) => {
     comboRef.current = 0;
     maxComboRef.current = 0;
     correctCountRef.current = 0;
     fastBonusCountRef.current = 0;
+    eggStepsRef.current = 0;
+    bossHpRef.current = initialBossHp;
+    turnCounterRef.current = 0;
+
     const initShields = activeCompanion?.perks.comboShields ?? 0;
     const initFreePeeks = activeCompanion?.perks.freePeeks ?? 0;
     shieldsRef.current = initShields;
@@ -130,6 +183,8 @@ export default function App() {
     setMaxCombo(0);
     setCorrectCount(0);
     setFastBonusCount(0);
+    setBossCurrentHp(initialBossHp);
+    setLastAttackLog(null);
     setShieldsRemaining(initShields);
     setShieldNotice(null);
     setFreePeeksRemaining(initFreePeeks);
@@ -147,11 +202,13 @@ export default function App() {
     }, 2400);
   };
 
-  // 啟動標準 11 題挑戰 (8 字音 + 3 字形)
-  const handleStartStandardQuiz = async () => {
-    const session = await generateStandardQuiz();
+  // 啟動標準或專場挑戰（智慧動態綜合 / 字形手寫專場 / 字音極速專場）
+  const handleStartStandardQuiz = async (
+    subMode: QuizSubMode = 'smart_balanced'
+  ) => {
+    const session = await generateStandardQuiz(subMode);
     setQuizSession(session);
-    resetSessionCounters();
+    resetSessionCounters(0);
 
     if (session.pronunciationQuestions.length > 0) {
       setView('quiz_pronunciation');
@@ -164,13 +221,101 @@ export default function App() {
   const handleStartSlimeBossQuiz = async () => {
     const session = await generateSlimeBossQuiz();
     setQuizSession(session);
-    resetSessionCounters();
+    resetSessionCounters(0);
 
     if (session.pronunciationQuestions.length > 0) {
       setView('quiz_pronunciation');
     } else if (session.characterQuestions.length > 0) {
       setView('quiz_character');
     }
+  };
+
+  // 啟動「街機魔王卡匣討伐戰」
+  const handleStartBossBattle = async (boss: BossEnemy, deck: BeastInstance[]) => {
+    setShowBossArenaModal(false);
+    const session = await generateBossBattleQuiz(boss);
+    const resolvedDeck =
+      deck.length > 0 ? deck : getResolvedBattleDeck(beasts, profile.battleDeckIds);
+
+    setQuizSession(session);
+    setActiveDeck(resolvedDeck);
+    resetSessionCounters(boss.maxHp);
+
+    if (session.pronunciationQuestions.length > 0) {
+      setView('quiz_pronunciation');
+    } else {
+      setView('quiz_character');
+    }
+  };
+
+  // 計算單題作答時，出戰神獸卡匣對魔王造成的傷害
+  const applyBossBattleTurn = (
+    isCorrect: boolean,
+    isCharacterStage: boolean,
+    nextCombo: number
+  ) => {
+    if (!quizSession || quizSession.mode !== 'boss_battle' || !quizSession.boss) {
+      return;
+    }
+
+    const boss = quizSession.boss;
+    const nextTurn = turnCounterRef.current + 1;
+    turnCounterRef.current = nextTurn;
+
+    if (!isCorrect) {
+      setLastAttackLog({
+        id: Date.now(),
+        attackerName: boss.name,
+        skillName: '魔王反擊咆哮',
+        damage: 0,
+        isSuperEffective: false,
+        isBossCounter: true
+      });
+      return;
+    }
+
+    // 輪流派出卡槽中的神獸卡發動必殺技
+    const attacker =
+      activeDeck.length > 0
+        ? activeDeck[(nextTurn - 1) % activeDeck.length]
+        : null;
+    const sp = attacker ? speciesMap.get(attacker.speciesId) : null;
+    const attackerStageInfo =
+      attacker && sp && attacker.stage !== 'egg'
+        ? getStageDisplayInfo(getStageForLevel(getBeastLevel(attacker)), sp)
+        : null;
+    const elemMeta = sp ? BOSS_ELEMENT_META[sp.element] : BOSS_ELEMENT_META.fire;
+
+    const { effectivePower } = calculateDeckVsBossPower(
+      activeDeck,
+      boss,
+      speciesMap
+    );
+
+    // 若卡組戰力達標，約答對 8~9 題可擊破魔王；若戰力不足則受魔王護盾減傷
+    const powerRatio = effectivePower / Math.max(1, boss.requiredCombatPower);
+    const shieldPenalty = powerRatio < 0.85 ? powerRatio * 0.75 : powerRatio;
+
+    const baseHit = Math.round((boss.maxHp / 8.2) * shieldPenalty);
+    const stageMultiplier = isCharacterStage ? 1.25 : 1.0; // 手寫字形題傷害加成 1.25x
+    const comboMultiplier = 1 + Math.min(5, nextCombo) * 0.06;
+    const isSuperEffective = sp?.element === boss.weaknessElement;
+
+    const finalDamage = Math.max(
+      45,
+      Math.round(baseHit * stageMultiplier * comboMultiplier)
+    );
+
+    const nextHp = Math.max(0, bossHpRef.current - finalDamage);
+    bossHpRef.current = nextHp;
+    setBossCurrentHp(nextHp);
+    setLastAttackLog({
+      id: Date.now(),
+      attackerName: attackerStageInfo?.name || attacker?.nickname || '守護神獸',
+      skillName: elemMeta.skillName,
+      damage: finalDamage,
+      isSuperEffective
+    });
   };
 
   // 答錯時嘗試觸發連擊護盾
@@ -203,6 +348,7 @@ export default function App() {
       comboRef.current = nextCombo;
       maxComboRef.current = Math.max(maxComboRef.current, nextCombo);
       correctCountRef.current += 1;
+      eggStepsRef.current += 1;
 
       setCombo(nextCombo);
       setMaxCombo(maxComboRef.current);
@@ -211,8 +357,10 @@ export default function App() {
         fastBonusCountRef.current += 1;
         setFastBonusCount(fastBonusCountRef.current);
       }
+      applyBossBattleTurn(true, false, nextCombo);
     } else {
       handleComboBreakOrShield();
+      applyBossBattleTurn(false, false, 0);
     }
   };
 
@@ -228,12 +376,15 @@ export default function App() {
       comboRef.current = nextCombo;
       maxComboRef.current = Math.max(maxComboRef.current, nextCombo);
       correctCountRef.current += 1;
+      eggStepsRef.current += 2; // 字形手寫答對雙倍孵蛋進度
 
       setCombo(nextCombo);
       setMaxCombo(maxComboRef.current);
       setCorrectCount(correctCountRef.current);
+      applyBossBattleTurn(true, true, nextCombo);
     } else {
       handleComboBreakOrShield();
+      applyBossBattleTurn(false, true, 0);
     }
   };
 
@@ -255,10 +406,14 @@ export default function App() {
 
     const rewards = await settleQuizRewards({
       mode: quizSession.mode,
+      subMode: quizSession.subMode,
+      boss: quizSession.boss,
+      bossRemainingHp: bossHpRef.current,
       totalQuestions,
       correctCount: correctCountRef.current,
       maxCombo: maxComboRef.current,
       fastBonusCount: fastBonusCountRef.current,
+      baseEggStepsEarned: eggStepsRef.current,
       companionPerks: activeCompanion?.perks ?? null,
       companionName: activeCompanion?.stageInfo.name,
       globalCoinBonusPct: maxAura.globalCoinBonusPct
@@ -271,10 +426,12 @@ export default function App() {
 
   const handleRetryCurrentMode = () => {
     setShowOutcomeModal(false);
-    if (quizSession?.mode === 'slime_boss') {
+    if (quizSession?.mode === 'boss_battle' && quizSession.boss) {
+      handleStartBossBattle(quizSession.boss, activeDeck);
+    } else if (quizSession?.mode === 'slime_boss') {
       handleStartSlimeBossQuiz();
     } else {
-      handleStartStandardQuiz();
+      handleStartStandardQuiz(quizSession?.subMode ?? 'smart_balanced');
     }
   };
 
@@ -294,7 +451,7 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-teal-50/50 to-amber-50/40 text-slate-800 pb-10">
       {/* 闖關模式下的返回牧場導覽列 */}
       {view !== 'ranch' && (
-        <div className="max-w-3xl mx-auto px-4 pt-4 flex items-center justify-between">
+        <div className="max-w-3xl mx-auto px-4 pt-4 flex items-center justify-between gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => {
@@ -310,13 +467,32 @@ export default function App() {
 
           {quizSession && view !== 'quiz_result' && view !== 'single_practice' && (
             <span className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800">
-              {quizSession.mode === 'slime_boss'
-                ? '👾 守護牧場：除魔魔王戰'
-                : '🏆 標準 11 題語文競賽挑戰'}
+              {quizSession.mode === 'boss_battle' && quizSession.boss
+                ? `🕹️ 魔王機台討伐戰：${quizSession.boss.name}`
+                : quizSession.mode === 'slime_boss'
+                ? '👾 守護牧場：除魔特訓'
+                : quizSession.subMode === 'character_focus'
+                ? '✍️ 字形手寫專場（2倍獎勵）'
+                : quizSession.subMode === 'pronunciation_focus'
+                ? '🔊 疾風字音極速專場 (10題)'
+                : '⚡ 智慧動態綜合闖關'}
             </span>
           )}
         </div>
       )}
+
+      {/* 街機魔王討伐戰頂部即時對決螢幕 */}
+      {quizSession?.mode === 'boss_battle' &&
+        quizSession.boss &&
+        (view === 'quiz_pronunciation' || view === 'quiz_character') && (
+          <BossBattleBanner
+            boss={quizSession.boss}
+            bossCurrentHp={bossCurrentHp}
+            deck={activeDeck}
+            speciesMap={speciesMap}
+            lastAttackLog={lastAttackLog}
+          />
+        )}
 
       {/* 主畫面：奇幻牧場 */}
       {view === 'ranch' && (
@@ -326,8 +502,16 @@ export default function App() {
           mistakeCount={mistakeCount}
           totalQuestionsCount={questions.length}
           masteredCount={masteredCount}
+          totalPronCount={totalPronCount}
+          masteredPronCount={masteredPronCount}
+          totalCharCount={totalCharCount}
+          masteredCharCount={masteredCharCount}
           onStartStandardQuiz={handleStartStandardQuiz}
           onStartSlimeBossQuiz={handleStartSlimeBossQuiz}
+          onOpenBossArena={(tab = 'bosses') => {
+            setBossArenaInitialTab(tab);
+            setShowBossArenaModal(true);
+          }}
           onOpenMistakeNotebook={() => setShowNotebookModal(true)}
           onOpenSettings={() => setShowSettingsModal(true)}
         />
@@ -394,7 +578,9 @@ export default function App() {
                   : 'bg-rose-100 text-rose-500'
               }`}
             >
-              {rewardSummary.passed ? (
+              {quizSession.mode === 'boss_battle' && quizSession.boss ? (
+                <span className="text-5xl">{quizSession.boss.emoji}</span>
+              ) : rewardSummary.passed ? (
                 <Trophy className="w-11 h-11" />
               ) : (
                 <ShieldAlert className="w-11 h-11" />
@@ -409,7 +595,11 @@ export default function App() {
                     : 'bg-rose-100 text-rose-700'
                 }`}
               >
-                {quizSession.mode === 'slime_boss'
+                {quizSession.mode === 'boss_battle'
+                  ? rewardSummary.bossDefeated
+                    ? `🎉 討伐成功！擊破【${quizSession.boss?.name}】！`
+                    : `🔥 魔王【${quizSession.boss?.name}】殘血逃脫（剩餘 ${(rewardSummary.bossRemainingHp ?? 0).toLocaleString()} HP）`
+                  : quizSession.mode === 'slime_boss'
                   ? rewardSummary.passed
                     ? '🎉 成功擊退食字史萊姆魔王！'
                     : '👾 魔王挑戰失敗（未達 60% 通關線）'
@@ -506,7 +696,7 @@ export default function App() {
 
             {rewardSummary.droppedEgg && (
               <div className="w-full p-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-sm shadow-md">
-                🎁 驚喜掉落！獲得一顆【{rewardSummary.droppedEgg.rarity}】
+                🎁 驚喜掉卡！獲得一顆【{rewardSummary.droppedEgg.rarity}】
                 {rewardSummary.droppedEgg.nickname}，已放入孵蛋巢位！
               </div>
             )}
@@ -521,13 +711,19 @@ export default function App() {
                 className="py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-base flex items-center justify-center gap-2 transition"
               >
                 <Home className="w-5 h-5" />
-                返回牧場餵食孵蛋
+                返回牧場餵食升星
               </button>
               <button
                 type="button"
                 onClick={() => {
                   sound.playClick();
-                  handleRetryCurrentMode();
+                  if (quizSession.mode === 'boss_battle') {
+                    setView('ranch');
+                    setBossArenaInitialTab('bosses');
+                    setShowBossArenaModal(true);
+                  } else {
+                    handleRetryCurrentMode();
+                  }
                 }}
                 className={`py-3.5 rounded-2xl text-white font-extrabold text-base shadow-lg flex items-center justify-center gap-2 transition ${
                   rewardSummary.passed
@@ -535,8 +731,17 @@ export default function App() {
                     : 'bg-rose-600 hover:bg-rose-500'
                 }`}
               >
-                <RotateCcw className="w-5 h-5" />
-                {rewardSummary.passed ? '再戰一局！' : '不服輸！再挑戰一次'}
+                {quizSession.mode === 'boss_battle' ? (
+                  <>
+                    <Swords className="w-5 h-5" />
+                    返回魔王機台大廳
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-5 h-5" />
+                    {rewardSummary.passed ? '再戰一局！' : '不服輸！再挑戰一次'}
+                  </>
+                )}
               </button>
             </div>
           </motion.div>
@@ -548,6 +753,7 @@ export default function App() {
         {showOutcomeModal && quizSession && rewardSummary && (
           <ChallengeResultModal
             mode={quizSession.mode}
+            boss={quizSession.boss}
             correctCount={correctCount}
             totalQuestions={totalQuizQuestions}
             maxCombo={maxCombo}
@@ -555,6 +761,21 @@ export default function App() {
             activeCompanion={activeCompanion}
             onViewRewards={() => setShowOutcomeModal(false)}
             onRetry={handleRetryCurrentMode}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 街機魔王對戰大廳 & 100% 里程碑 Modal */}
+      <AnimatePresence>
+        {showBossArenaModal && (
+          <BossArenaModal
+            profile={profile}
+            beasts={beasts}
+            masteredCount={masteredCount}
+            totalQuestionsCount={questions.length}
+            initialTab={bossArenaInitialTab}
+            onClose={() => setShowBossArenaModal(false)}
+            onStartBossBattle={handleStartBossBattle}
           />
         )}
       </AnimatePresence>

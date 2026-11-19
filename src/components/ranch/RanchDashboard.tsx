@@ -18,7 +18,9 @@ import {
   X,
   Shield,
   Timer,
-  Star
+  Star,
+  Trophy,
+  Flame
 } from 'lucide-react';
 import { db } from '../../db/database';
 import {
@@ -27,6 +29,15 @@ import {
   PlayerProfile
 } from '../../types/game';
 import { BEAST_SPECIES_LIST } from '../../data/beasts';
+import {
+  BOSS_LIST,
+  ELEMENT_META as BOSS_ELEMENT_META,
+  MILESTONE_GOALS,
+  calculateTeamCombatPower,
+  getBeastCardStars,
+  getSingleBeastPower
+} from '../../data/bosses';
+import { QuizSubMode } from '../../services/quizEngine';
 import { sound } from '../../utils/sound';
 import {
   ELEMENT_META,
@@ -68,8 +79,13 @@ interface RanchDashboardProps {
   mistakeCount: number;
   totalQuestionsCount: number;
   masteredCount: number;
-  onStartStandardQuiz: () => void;
+  totalPronCount: number;
+  masteredPronCount: number;
+  totalCharCount: number;
+  masteredCharCount: number;
+  onStartStandardQuiz: (subMode?: QuizSubMode) => void;
   onStartSlimeBossQuiz: () => void;
+  onOpenBossArena: (initialTab?: 'bosses' | 'milestones') => void;
   onOpenMistakeNotebook: () => void;
   onOpenSettings: () => void;
 }
@@ -80,8 +96,13 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   mistakeCount,
   totalQuestionsCount,
   masteredCount,
+  totalPronCount,
+  masteredPronCount,
+  totalCharCount,
+  masteredCharCount,
   onStartStandardQuiz,
   onStartSlimeBossQuiz,
+  onOpenBossArena,
   onOpenMistakeNotebook,
   onOpenSettings
 }) => {
@@ -115,6 +136,29 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   const maxAura = useMemo(() => getRanchMaxAuraSummary(beasts), [beasts]);
 
   const isSlimeCrisis = mistakeCount >= 8;
+  const teamCombatPower = calculateTeamCombatPower(beasts, profile.battleDeckIds);
+  const defeatedBossCount = (profile.defeatedBossIds || []).length;
+  const claimedMilestones = profile.claimedMilestoneIds || [];
+
+  const overallPercent =
+    totalQuestionsCount > 0
+      ? Math.min(100, Math.round((masteredCount / totalQuestionsCount) * 100))
+      : 0;
+
+  const nextMilestone =
+    MILESTONE_GOALS.find((m) => {
+      const target = m.isFullCompletion ? totalQuestionsCount : m.targetCount;
+      return !claimedMilestones.includes(m.milestoneId) && masteredCount < target;
+    }) || MILESTONE_GOALS[MILESTONE_GOALS.length - 1];
+
+  const hasUnclaimedMilestone = MILESTONE_GOALS.some((m) => {
+    const target = m.isFullCompletion ? totalQuestionsCount : m.targetCount;
+    return masteredCount >= target && !claimedMilestones.includes(m.milestoneId);
+  });
+
+  const nextMilestoneTarget = nextMilestone.isFullCompletion
+    ? totalQuestionsCount
+    : nextMilestone.targetCount;
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -330,14 +374,14 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
             🏰
           </div>
           <div>
-            <h1 className="font-extrabold text-lg md:text-xl text-slate-800 flex items-center gap-2">
+            <h1 className="font-extrabold text-lg md:text-xl text-slate-800 flex items-center gap-2 flex-wrap">
               {profile.nickname}
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                最高 {profile.highCombo} 連擊
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold border border-amber-300">
+                ⚡ 出戰卡組戰力 {teamCombatPower} CP
               </span>
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              已收錄題庫 {totalQuestionsCount} 題 ｜ 已熟悉/精通 {masteredCount} 題 ｜ 待複習錯題 {mistakeCount} 題
+              已收錄題庫 {totalQuestionsCount} 題 ｜ 已熟悉通過 {masteredCount} 題 ({overallPercent}%) ｜ 待複習錯題 {mistakeCount} 題
             </p>
           </div>
         </div>
@@ -376,6 +420,51 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
           >
             <Settings className="w-5 h-5" />
           </button>
+        </div>
+      </div>
+
+      {/* 階段里程碑 (50 -> 150 -> 250 -> 500 -> 750 -> 1000 -> 100% 終極制霸) 進度橫幅 */}
+      <div
+        onClick={() => {
+          sound.playClick();
+          onOpenBossArena('milestones');
+        }}
+        className="bg-gradient-to-r from-indigo-950 via-slate-900 to-emerald-950 text-white rounded-3xl p-4 shadow-md border-2 border-amber-300/60 cursor-pointer hover:brightness-105 transition"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-amber-400" />
+            <span className="font-extrabold text-sm text-amber-300">
+              {nextMilestone.badgeEmoji} 當前階段目標：{nextMilestone.title}
+            </span>
+            {hasUnclaimedMilestone && (
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white font-black text-xs animate-bounce">
+                🎁 有可領取的階段大獎！點擊領取
+              </span>
+            )}
+          </div>
+          <div className="text-xs font-extrabold text-emerald-300 flex flex-wrap items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/30">
+              🔊 字音：{masteredPronCount}/{totalPronCount}
+            </span>
+            <span className="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-400/30 text-indigo-200">
+              ✍️ 字形：{masteredCharCount}/{totalCharCount}
+            </span>
+            <span>
+              總通關：{overallPercent}% (目標 {nextMilestoneTarget} 題)
+            </span>
+          </div>
+        </div>
+        <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden border border-white/15">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-400 via-amber-400 to-orange-500 transition-all duration-500"
+            style={{
+              width: `${Math.min(
+                100,
+                Math.round((masteredCount / Math.max(1, nextMilestoneTarget)) * 100)
+              )}%`
+            }}
+          />
         </div>
       </div>
 
@@ -431,32 +520,89 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
         </motion.div>
       )}
 
-      {/* 核心行動大按鈕區（出擊闖關 / 錯題本 / 抽蛋屋 / 圖鑑） */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+      {/* 核心行動大按鈕區（智慧闖關 + 字形雙倍專場 / 街機魔王對戰台 / 錯題本 / 抽蛋屋 / 圖鑑） */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
+        {/* 日常練功區：含「智慧均衡闖關」與「字形手寫專場（雙倍獎勵）」與「字音極速專場」 */}
+        <div className="md:col-span-5 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              sound.playClick();
+              onStartStandardQuiz('smart_balanced');
+            }}
+            className="p-4 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-xl border-4 border-emerald-200 flex items-center justify-between group transition active:scale-[0.99]"
+          >
+            <div className="text-left">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-bold mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                智慧動態配比（通關即送加速券）
+              </span>
+              <h2 className="text-xl font-extrabold tracking-tight">
+                ⚡ 綜合闖關（字音＋字形）
+              </h2>
+              <p className="text-emerald-100 text-xs mt-0.5 font-medium">
+                {activeCompanion
+                  ? `出戰夥伴：${activeCompanion.stageInfo.emoji} ${activeCompanion.stageInfo.name} Lv.${activeCompanion.level}（+${activeCompanion.perks.extraSeconds}秒 / 獎勵+${activeCompanion.perks.rewardBonusPct}%）`
+                  : '自動依剩餘未測題數調整比例，穩步推進 100%！'}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition shrink-0">
+              <Swords className="w-6 h-6 text-white" />
+            </div>
+          </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                onStartStandardQuiz('character_focus');
+              }}
+              className="py-2.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow flex items-center justify-center gap-1.5 transition active:scale-95"
+            >
+              <span>✍️ 字形手寫專場 (2倍獎勵)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                onStartStandardQuiz('pronunciation_focus');
+              }}
+              className="py-2.5 px-3 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs shadow flex items-center justify-center gap-1.5 transition active:scale-95"
+            >
+              <span>🔊 字音極速專場 (10題)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 寶可夢機台風「神獸卡匣對戰魔王台」 */}
         <button
           type="button"
           onClick={() => {
             sound.playClick();
-            onStartStandardQuiz();
+            onOpenBossArena('bosses');
           }}
-          className="md:col-span-6 p-6 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-xl border-4 border-emerald-200 flex items-center justify-between group transition active:scale-[0.99]"
+          className="md:col-span-3 p-5 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-rose-900 hover:brightness-110 text-white shadow-xl border-4 border-amber-400 flex items-center justify-between group transition active:scale-[0.99] relative"
         >
-          <div className="text-left">
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/20 text-xs font-bold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              8 題字音快問快答 + 3 題字形手寫（60% 通關）
+          {hasUnclaimedMilestone && (
+            <span className="absolute -top-2 -right-2 px-2.5 py-0.5 rounded-full bg-rose-500 text-white text-[11px] font-black shadow">
+              NEW!
             </span>
-            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-              出發！語文競賽大挑戰
+          )}
+          <div className="text-left">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black mb-1.5">
+              <Flame className="w-3.5 h-3.5" />
+              街機卡槽對決 ({defeatedBossCount}/{BOSS_LIST.length} 討伐)
+            </span>
+            <h2 className="text-xl md:text-2xl font-black text-amber-300 tracking-tight">
+              🕹️ 魔王機台討伐戰
             </h2>
-            <p className="text-emerald-100 text-sm mt-1 font-medium">
-              {activeCompanion
-                ? `出戰夥伴：${activeCompanion.stageInfo.emoji} ${activeCompanion.stageInfo.name} Lv.${activeCompanion.level}（+${activeCompanion.perks.extraSeconds}秒 / 獎勵+${activeCompanion.perks.rewardBonusPct}%）`
-                : '每答對 1 題推進孵蛋 +1 步，並掉落金幣與靈氣牧草！'}
+            <p className="text-indigo-200 text-xs mt-1 font-medium">
+              派出 3 張神獸卡匣，打倒強敵贏取限定神蛋！
             </p>
           </div>
-          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition shrink-0">
-            <Swords className="w-9 h-9 text-white" />
+          <div className="text-4xl group-hover:scale-110 transition shrink-0">
+            👹
           </div>
         </button>
 
@@ -466,46 +612,42 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
             sound.playClick();
             onOpenMistakeNotebook();
           }}
-          className="md:col-span-2 p-4 rounded-3xl bg-white hover:bg-amber-50/70 border-2 border-amber-200 shadow-sm flex flex-col items-center justify-center gap-1.5 transition active:scale-95"
+          className="md:col-span-2 p-3.5 rounded-3xl bg-white hover:bg-amber-50/70 border-2 border-amber-200 shadow-sm flex flex-col items-center justify-center gap-1 transition active:scale-95"
         >
-          <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
-            <BookOpen className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+            <BookOpen className="w-5 h-5" />
           </div>
-          <span className="font-extrabold text-slate-800 text-sm">個人錯題本</span>
-          <span className="text-xs font-bold text-rose-600">
-            {mistakeCount > 0 ? `${mistakeCount} 題待複習` : '題庫全覽'}
+          <span className="font-extrabold text-slate-800 text-xs">個人錯題本</span>
+          <span className="text-[11px] font-bold text-rose-600">
+            {mistakeCount > 0 ? `${mistakeCount} 題待複習` : `${totalQuestionsCount}題全覽`}
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            sound.playClick();
-            setShowGachaModal(true);
-          }}
-          className="md:col-span-2 p-4 rounded-3xl bg-white hover:bg-purple-50/70 border-2 border-purple-200 shadow-sm flex flex-col items-center justify-center gap-1.5 transition active:scale-95"
-        >
-          <div className="w-11 h-11 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center">
-            <Gift className="w-6 h-6" />
-          </div>
-          <span className="font-extrabold text-slate-800 text-sm">神秘抽蛋屋</span>
-          <span className="text-xs font-bold text-purple-600">召喚新神獸</span>
-        </button>
+        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-1 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              sound.playClick();
+              setShowGachaModal(true);
+            }}
+            className="p-2.5 rounded-2xl bg-white hover:bg-purple-50/70 border-2 border-purple-200 shadow-sm flex items-center justify-center gap-2 transition active:scale-95"
+          >
+            <Gift className="w-4 h-4 text-purple-600" />
+            <span className="font-extrabold text-slate-800 text-xs">神秘抽蛋屋</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            sound.playClick();
-            setShowBestiaryModal(true);
-          }}
-          className="md:col-span-2 p-4 rounded-3xl bg-white hover:bg-sky-50/70 border-2 border-sky-200 shadow-sm flex flex-col items-center justify-center gap-1.5 transition active:scale-95"
-        >
-          <div className="w-11 h-11 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center">
-            <Crown className="w-6 h-6" />
-          </div>
-          <span className="font-extrabold text-slate-800 text-sm">神獸圖鑑</span>
-          <span className="text-xs font-bold text-sky-600">12 種傳說神獸</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              sound.playClick();
+              setShowBestiaryModal(true);
+            }}
+            className="p-2.5 rounded-2xl bg-white hover:bg-sky-50/70 border-2 border-sky-200 shadow-sm flex items-center justify-center gap-2 transition active:scale-95"
+          >
+            <Crown className="w-4 h-4 text-sky-600" />
+            <span className="font-extrabold text-slate-800 text-xs">神獸卡匣圖鑑</span>
+          </button>
+        </div>
       </div>
 
       {/* 兩欄主視覺：左側「3 個孵蛋巢位」+ 右側「神獸草地互動與餵食進化區」 */}
@@ -639,7 +781,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
               <div className="flex items-center gap-2">
                 <Sprout className="w-5 h-5 text-emerald-700" />
                 <h3 className="font-extrabold text-lg text-emerald-950">
-                  奇幻神獸大草原 ({hatchedBeasts.length} 隻夥伴)
+                  我的神獸卡匣收藏 ({hatchedBeasts.length} 張卡匣)
                 </h3>
               </div>
               {maxAura.maxedCount > 0 ? (
@@ -648,16 +790,16 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                 </span>
               ) : (
                 <span className="text-xs text-emerald-800 font-semibold">
-                  升等解鎖陪考技能，滿級 Lv.6 再送全牧場光環！
+                  餵食「靈氣牧草」讓卡匣升等升星（★1 ➔ ★3 ➔ ★5），解鎖陪考技能與更強戰力！
                 </span>
               )}
             </div>
 
             {hatchedBeasts.length === 0 ? (
               <div className="h-52 rounded-2xl bg-white/70 border-2 border-dashed border-emerald-300 flex flex-col items-center justify-center text-center p-6">
-                <span className="text-4xl mb-2">🌱</span>
+                <span className="text-4xl mb-2">🎴</span>
                 <p className="font-extrabold text-emerald-900">
-                  草原上還沒有孵出的神獸夥伴喔！
+                  目前還沒有孵出神獸卡匣喔！
                 </p>
                 <p className="text-xs text-emerald-700 mt-1">
                   快去挑戰字音字形關卡或使用「加速券」孵化左側的神秘蛋吧！
@@ -671,6 +813,8 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                   const level = getBeastLevel(beast);
                   const stage = getStageForLevel(level);
                   const stageInfo = getStageDisplayInfo(stage, species);
+                  const cardStars = getBeastCardStars(stage);
+                  const cardPower = getSingleBeastPower(beast);
                   const isSelected = selectedBeast?.instanceId === beast.instanceId;
                   const isActivePartner =
                     activeCompanion?.beast.instanceId === beast.instanceId;
@@ -745,13 +889,19 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                         )}
                       </AnimatePresence>
 
-                      <div className="text-4xl my-1.5 select-none">{stageInfo.emoji}</div>
+                      <div className="text-[11px] font-black text-amber-500 mt-2">
+                        {'★'.repeat(cardStars)}
+                      </div>
+                      <div className="text-4xl my-1 select-none">{stageInfo.emoji}</div>
                       <span className="font-extrabold text-sm text-slate-800 line-clamp-1">
                         {stageInfo.name}
                       </span>
-                      <div className="flex items-center gap-1 mt-1">
+                      <div className="flex items-center gap-1 mt-1 flex-wrap justify-center">
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                          ⚡{cardPower}
+                        </span>
                         <span
-                          className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             level >= MAX_BEAST_LEVEL
                               ? 'bg-amber-100 text-amber-900'
                               : 'bg-emerald-100 text-emerald-800'
@@ -959,6 +1109,9 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                               className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${elemMeta.badgeClass}`}
                             >
                               {elemMeta.emoji} {elemMeta.label}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-black">
+                              {'★'.repeat(getBeastCardStars(stage))} ⚡{getSingleBeastPower(selectedBeast)} CP
                             </span>
                             <h4 className="font-extrabold text-base text-slate-800">
                               {info.name}
@@ -1216,7 +1369,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                 <div className="flex items-center gap-2">
                   <Crown className="w-6 h-6 text-sky-600" />
                   <h3 className="text-xl font-extrabold text-slate-800">
-                    奇幻牧場神獸圖鑑（共 12 種三段進化）
+                    神獸卡匣全圖鑑（共 12 種三段升星：★1 ➔ ★3 ➔ ★5）
                   </h3>
                 </div>
                 <button
@@ -1234,6 +1387,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                     (b) => b.speciesId === sp.speciesId && b.stage !== 'egg'
                   );
                   const isUnlocked = ownedInstances.length > 0;
+                  const bossElem = BOSS_ELEMENT_META[sp.element];
 
                   return (
                     <div
@@ -1245,9 +1399,9 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold text-white ${
+                            className={`px-2 py-0.5 rounded-full text-xs font-extrabold text-white ${
                               sp.rarity === 'SSR'
                                 ? 'bg-gradient-to-r from-amber-500 to-rose-500'
                                 : sp.rarity === 'SR'
@@ -1259,8 +1413,11 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                           >
                             {sp.rarity}
                           </span>
-                          <span className="font-extrabold text-slate-800">
-                            {sp.eggName}（孵化需 {sp.eggStepsRequired} 題）
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${bossElem.badgeClass}`}>
+                            {bossElem.emoji}{bossElem.label}
+                          </span>
+                          <span className="font-extrabold text-slate-800 text-sm">
+                            {sp.eggName}（{sp.eggStepsRequired} 題）
                           </span>
                         </div>
                         <span className="text-xs font-bold text-emerald-700">
@@ -1270,22 +1427,25 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
 
                       <div className="grid grid-cols-3 gap-2 mt-3 text-center">
                         <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-                          <div className="text-2xl">{isUnlocked ? sp.stages.baby.emoji : '❓'}</div>
-                          <div className="text-xs font-bold text-slate-700 mt-1">
+                          <div className="text-[10px] font-black text-amber-500">★1 幼獸卡</div>
+                          <div className="text-2xl my-0.5">{isUnlocked ? sp.stages.baby.emoji : '❓'}</div>
+                          <div className="text-xs font-bold text-slate-700">
                             {sp.stages.baby.name}
                           </div>
                           <div className="text-[10px] font-bold text-slate-400">Lv.1~2</div>
                         </div>
                         <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-                          <div className="text-2xl">{isUnlocked ? sp.stages.adult.emoji : '❓'}</div>
-                          <div className="text-xs font-bold text-slate-700 mt-1">
+                          <div className="text-[10px] font-black text-amber-500">★★★ 成體卡</div>
+                          <div className="text-2xl my-0.5">{isUnlocked ? sp.stages.adult.emoji : '❓'}</div>
+                          <div className="text-xs font-bold text-slate-700">
                             {sp.stages.adult.name}
                           </div>
                           <div className="text-[10px] font-bold text-slate-400">Lv.3~4</div>
                         </div>
                         <div className="p-2 rounded-xl bg-amber-50/60 border border-amber-100">
-                          <div className="text-2xl">{isUnlocked ? sp.stages.awakened.emoji : '❓'}</div>
-                          <div className="text-xs font-bold text-amber-900 mt-1">
+                          <div className="text-[10px] font-black text-amber-600">★★★★★ 覺醒卡</div>
+                          <div className="text-2xl my-0.5">{isUnlocked ? sp.stages.awakened.emoji : '❓'}</div>
+                          <div className="text-xs font-bold text-amber-900">
                             {sp.stages.awakened.name}
                           </div>
                           <div className="text-[10px] font-bold text-amber-600">Lv.5~6 MAX</div>

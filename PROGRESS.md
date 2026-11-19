@@ -1,9 +1,9 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：Phase 6 體驗與養成深度優化完成（通關／失敗動畫 Modal、撫摸＆餵草動畫、每等級升級成果動畫、出戰夥伴 Lv.1~Lv.6 技能加成與滿級光環皆已實作並通過 `npm run build` 驗證）
+- **目前階段**：Phase 7 雙版本完整合併完成（已將另一台主機的「🕹️ 魔王機台討伐戰 / 3 卡槽神獸卡匣 / 七大魔王 / 100% 階段里程碑 / 智慧動態三大練功模式」與本機「通關失敗動畫 / 撫摸餵草互動 / Lv.1~Lv.6 升級成果動畫 / 出戰夥伴技能加成」完整合併，並修正日常挑戰通關必定發放加速券）
 - **最後更新時間**：2026-11-19
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：所有核心與進階體驗優化皆已完成並通過建置！後續可依小朋友實機 iPad 試用回饋微調數值或擴充題庫。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：合併版本已通過 `tsc --noEmit` 與 `vite build` 驗證，可供小朋友於 iPad 實機試玩驗收並決定是否推送至 `origin/main`。
 
 ---
 
@@ -57,6 +57,22 @@
 
 ## AI Agent 交接日誌 (Handoff Log)
 > 每次 Agent 結束工作前，請在下方新增一筆紀錄（由新到舊排列）：
+
+### 2026-11-19 - Merge Arcade Boss Battle & UX Polish + Speed Ticket Fix
+- **完成任務**：
+  - 完整合併 `origin/feat/arcade-boss-backup`（`0bb840b`）與本機 `backup/local-ux-polish`（`a9b6fcf`）兩套功能：
+    - 還原並整合「🕹️ 魔王機台討伐戰（7 大強敵魔王、已討伐狀態追蹤、3 卡槽編成、一鍵弱點配卡、1.5 倍屬性克制）」與「🏆 階段里程碑 & 100% 全題庫制霸（雙軌字音/字形進度條）」
+    - 還原三大練功出擊模式（`⚡ 綜合闖關（字音＋字形）`、`✍️ 字形手寫專場 (2倍獎勵)`、`🔊 字音極速專場 (10題)`）與 100% 未測新題優先抽題演算法、字形手寫 +2 步孵蛋進度
+    - 整合 Lv.1～Lv.6 等級制度與 `★1/★3/★5` 卡匣戰力（每升一級皆平滑提升 CP）、`BeastLevelUpModal`、撫摸＆餵草互動動畫、以及出戰夥伴陪考技能（含字音延時、連擊護盾、光系免費偷看、滿級光環）
+    - 擴充 `ChallengeResultModal` 支援 `boss_battle` 街機魔王討伐成功／殘血逃脫動畫，並以 `bossHpRef` 修正最後一題擊殺魔王時同步結算可能讀到舊血量的問題
+  - **修正加速券規則**：日常挑戰（綜合闖關／字形專場／字音專場）只要通關成功（`>= 60%`）即必定獲得 `+1` 張孵蛋加速券（滿分全對 `+2` 張）；除魔特訓通關 `+1`（75% 以上 `+2`）；魔王機台討伐成功 `+2` 張。
+- **新增/修改檔案**：
+  - 新增 `src/data/bosses.ts`, `src/components/ranch/BossArenaModal.tsx`, `src/components/quiz/BossBattleBanner.tsx`
+  - 修改 `src/types/game.ts`, `src/services/quizEngine.ts`, `src/components/quiz/ChallengeResultModal.tsx`, `src/components/ranch/RanchDashboard.tsx`, `src/App.tsx`, `SPEC.md`, `PROGRESS.md`
+- **目前系統狀態**：`npm run build` 零錯誤通過。
+
+### 2026-11-17 - Arcade Boss Battle & Milestone Progression Upgrade (from `feat/arcade-boss-backup`)
+- **完成任務**：新增「寶可夢機台風神獸卡匣對戰系統（Boss Arcade Machine）」、「階段里程碑 & 100% 全題庫完全制霸系統」、以及「字音/字形智慧動態配比與專場衝刺機制」
 
 ### 2026-11-19 - UX Polish & Companion Progression Upgrade
 - **完成任務**：

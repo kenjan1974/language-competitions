@@ -6,6 +6,7 @@ import {
   BeastInstance
 } from '../types/game';
 import { BEAST_SPECIES_LIST } from '../data/beasts';
+import { BeastPerks } from '../utils/beastPerks';
 
 export interface QuizSessionData {
   mode: 'standard' | 'slime_boss';
@@ -14,6 +15,10 @@ export interface QuizSessionData {
 }
 
 export interface QuizRewardSummary {
+  passed: boolean;
+  stars: 0 | 1 | 2 | 3;
+  passThreshold: number;
+  accuracy: number;
   coinsEarned: number;
   gemsEarned: number;
   forageEarned: number;
@@ -21,6 +26,11 @@ export interface QuizRewardSummary {
   eggStepsAdded: number;
   droppedEgg?: BeastInstance;
   slimeDefeated: boolean;
+  companionBonusCoins: number;
+  companionBonusForage: number;
+  companionBonusGems: number;
+  companionBonusEggSteps: number;
+  companionName?: string;
 }
 
 /** 陣列隨機洗牌 */
@@ -262,29 +272,95 @@ export async function settleQuizRewards(params: {
   correctCount: number;
   maxCombo: number;
   fastBonusCount: number;
+  companionPerks?: BeastPerks | null;
+  companionName?: string;
+  globalCoinBonusPct?: number;
 }): Promise<QuizRewardSummary> {
-  const { mode, totalQuestions, correctCount, maxCombo, fastBonusCount } = params;
+  const {
+    mode,
+    totalQuestions,
+    correctCount,
+    maxCombo,
+    fastBonusCount,
+    companionPerks,
+    companionName,
+    globalCoinBonusPct = 0
+  } = params;
+
+  const safeTotal = Math.max(1, totalQuestions);
+  const passThreshold = Math.ceil(safeTotal * 0.6);
+  const accuracy = Math.round((correctCount / safeTotal) * 100);
+  const passed = correctCount >= passThreshold;
+  const slimeDefeated = mode === 'slime_boss' && passed;
+
+  const stars: 0 | 1 | 2 | 3 = !passed
+    ? 0
+    : accuracy >= 90
+    ? 3
+    : accuracy >= 75
+    ? 2
+    : 1;
 
   const baseCoins = correctCount * 15 + fastBonusCount * 5 + maxCombo * 8;
-  const coinsEarned = mode === 'slime_boss' ? baseCoins + 50 : baseCoins;
+  const rawCoins = slimeDefeated ? baseCoins + 50 : baseCoins;
 
-  const forageEarned = Math.max(1, Math.floor(correctCount / 2) + (maxCombo >= 4 ? 2 : 1));
-  const gemsEarned =
-    (mode === 'slime_boss' ? 8 : 0) +
-    (correctCount === totalQuestions ? 5 : 0) +
+  const rawForage = Math.max(
+    1,
+    Math.floor(correctCount / 2) + (maxCombo >= 4 ? 2 : passed ? 1 : 0)
+  );
+  const rawGems =
+    (slimeDefeated ? 8 : 0) +
+    (correctCount === safeTotal ? 5 : 0) +
     (maxCombo >= 5 ? 3 : maxCombo >= 3 ? 1 : 0);
 
+  // 套用出戰神獸夥伴加成與全牧場滿級祝福
+  const totalCoinPct =
+    (companionPerks ? companionPerks.rewardBonusPct + companionPerks.extraCoinsPct : 0) +
+    globalCoinBonusPct;
+  const companionBonusCoins =
+    totalCoinPct > 0 ? Math.round((rawCoins * totalCoinPct) / 100) : 0;
+
+  const companionForagePctBonus =
+    companionPerks && companionPerks.rewardBonusPct > 0
+      ? Math.round((rawForage * companionPerks.rewardBonusPct) / 100)
+      : 0;
+  const companionBonusForage =
+    companionForagePctBonus + (companionPerks?.extraForage ?? 0);
+
+  const companionBonusGems = passed ? companionPerks?.extraGems ?? 0 : 0;
+  const companionBonusEggSteps = passed ? companionPerks?.extraEggSteps ?? 0 : 0;
+
+  const coinsEarned = rawCoins + companionBonusCoins;
+  const forageEarned = rawForage + companionBonusForage;
+  const gemsEarned = rawGems + companionBonusGems;
+
   const speedTicketsEarned =
-    mode === 'slime_boss' && correctCount >= Math.ceil(totalQuestions * 0.75)
+    mode === 'slime_boss' && correctCount >= Math.ceil(safeTotal * 0.75)
       ? 2
-      : correctCount >= 9
+      : correctCount >= Math.ceil(safeTotal * 0.8)
       ? 1
       : 0;
 
-  // 若牧場孵蛋巢位未滿 3 顆，且答對率高，機率掉落 1 顆免費神秘蛋
+  // 若星系高階出戰神獸有額外孵蛋步數，同步推進孵蛋巢位
+  if (companionBonusEggSteps > 0) {
+    const eggs = await db.beasts
+      .where('stage')
+      .equals('egg')
+      .sortBy('obtainedAt');
+    const activeNestEggs = eggs.slice(0, 3);
+    for (const egg of activeNestEggs) {
+      if (egg.eggProgress < egg.eggTarget) {
+        await db.beasts.update(egg.instanceId, {
+          eggProgress: Math.min(egg.eggTarget, egg.eggProgress + companionBonusEggSteps)
+        });
+      }
+    }
+  }
+
+  // 若牧場孵蛋巢位未滿 3 顆，且通關答對率高，機率掉落 1 顆免費神秘蛋
   let droppedEgg: BeastInstance | undefined;
   const currentEggs = await db.beasts.where('stage').equals('egg').count();
-  if (currentEggs < 3 && correctCount >= Math.ceil(totalQuestions * 0.7)) {
+  if (passed && currentEggs < 3 && correctCount >= Math.ceil(safeTotal * 0.7)) {
     const roll = Math.random();
     if (roll < 0.45) {
       const normalOrRarePool = BEAST_SPECIES_LIST.filter(
@@ -301,6 +377,7 @@ export async function settleQuizRewards(params: {
         eggProgress: 0,
         eggTarget: picked.eggStepsRequired,
         currentExp: 0,
+        level: 0,
         obtainedAt: Date.now()
       };
       await db.beasts.put(droppedEgg);
@@ -321,12 +398,21 @@ export async function settleQuizRewards(params: {
   }
 
   return {
+    passed,
+    stars,
+    passThreshold,
+    accuracy,
     coinsEarned,
     gemsEarned,
     forageEarned,
     speedTicketsEarned,
-    eggStepsAdded: correctCount,
+    eggStepsAdded: correctCount + companionBonusEggSteps,
     droppedEgg,
-    slimeDefeated: mode === 'slime_boss' && correctCount >= Math.ceil(totalQuestions * 0.6)
+    slimeDefeated,
+    companionBonusCoins,
+    companionBonusForage,
+    companionBonusGems,
+    companionBonusEggSteps,
+    companionName
   };
 }

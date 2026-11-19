@@ -1,9 +1,9 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：Phase 5 完成（全階段 Task 1.0 ~ Task 5.2 皆已實作並通過 TypeScript 與 Vite PWA 建置驗證）
-- **最後更新時間**：2026-11-17
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：所有核心規格與任務（Phase 1 ~ Phase 5）皆已完成！後續可依需求執行 `npm run extract-pdf` 擴充 `/raw_pdfs` 新考古題，或執行 `npm run dev` 進行實機 iPad 測試與遊玩。
+- **目前階段**：Phase 6 體驗與養成深度優化完成（通關／失敗動畫 Modal、撫摸＆餵草動畫、每等級升級成果動畫、出戰夥伴 Lv.1~Lv.6 技能加成與滿級光環皆已實作並通過 `npm run build` 驗證）
+- **最後更新時間**：2026-11-19
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：所有核心與進階體驗優化皆已完成並通過建置！後續可依小朋友實機 iPad 試用回饋微調數值或擴充題庫。
 
 ---
 
@@ -57,6 +57,20 @@
 
 ## AI Agent 交接日誌 (Handoff Log)
 > 每次 Agent 結束工作前，請在下方新增一筆紀錄（由新到舊排列）：
+
+### 2026-11-19 - UX Polish & Companion Progression Upgrade
+- **完成任務**：
+  - 挑戰結束「通關成功／挑戰失敗」全螢幕動畫 Modal（套用於標準 11 題挑戰與除魔魔王戰，60% 及格門檻、0~3 星評分、魔王擊飛／逃跑與出戰夥伴鼓勵動畫、區分勝利號角與柔和失敗音效）
+  - 撫摸與餵草即時互動動畫（獨立「撫摸撒嬌」按鈕、頭像與草地卡片同步搖擺彈跳、飄散愛心、隨機撒嬌語錄氣泡；餵食靈氣牧草顯示牧草飛入、閃光粒子、`+15 EXP!` 浮動字與平滑經驗條）
+  - 奇獸 Lv.1 ~ Lv.6 等級制度與每等級升級成果動畫 Modal（含階段進化閃光過場、升級前後能力對比、元素技能解鎖／強化提示與滿級 MAX 標記）
+  - 「出戰夥伴」陪考技能加成機制（字音限時延長、每局連擊護盾防斷 Combo、金幣與牧草獎勵加成、五大元素專屬技能如光系聖光免費偷看／星系額外寶石與孵蛋步數，以及 Lv.6 滿級全牧場 +5% 金幣常駐光環）
+  - 順手修正 `App.tsx` 最後一題作答與結算同步呼叫時 `correctCount` 尚未刷新導致的計分誤差
+- **新增/修改檔案**：
+  - 新增 `src/utils/beastPerks.ts`, `src/components/ranch/BeastLevelUpModal.tsx`, `src/components/quiz/ChallengeResultModal.tsx`
+  - 修改 `src/types/game.ts`, `src/utils/sound.ts`, `src/services/quizEngine.ts`, `src/components/quiz/PronunciationStage.tsx`, `src/components/quiz/CharacterWritingStage.tsx`, `src/components/ranch/RanchDashboard.tsx`, `src/App.tsx`
+- **目前系統狀態**：`npm run build` (`tsc --noEmit && vite build`) 零錯誤通過，PWA 打包正常。
+- **已知問題與注意事項**：無。舊版 IndexedDB 存檔完全相容（缺少 `level` 或 `activeBeastId` 時會自動依既有 `stage` 與最高等級神獸平滑推算）。
+- **下一個 Agent 請直接執行**：啟動 `npm run dev` 供小朋友於 iPad 實機試玩驗收。
 
 ### 2026-11-17 - Full Implementation Agent (Phase 1 ~ Phase 5)
 - **完成任務**：Task 1.1, Task 1.2, Task 2.2, Task 3.1, Task 3.2, Task 3.3, Task 4.1, Task 4.2, Task 5.1, Task 5.2

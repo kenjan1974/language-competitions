@@ -159,6 +159,190 @@ class SoundManager {
     osc.start(now);
     osc.stop(now + 0.25);
   }
+
+  /** 撫摸神獸撒嬌（溫柔雙連啾啾聲） */
+  public playPetPurr() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const chirps = [
+      { start: 0, f1: 620, f2: 920 },
+      { start: 0.13, f1: 740, f2: 1120 }
+    ];
+    chirps.forEach(({ start, f1, f2 }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f1, now + start);
+      osc.frequency.exponentialRampToValueAtTime(f2, now + start + 0.09);
+
+      gain.gain.setValueAtTime(0.001, now + start);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + start + 0.14);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + start);
+      osc.stop(now + start + 0.15);
+    });
+  }
+
+  /** 餵食靈氣牧草（可愛咬嚼 + 吸收光點音效） */
+  public playFeedCrunch() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const pops = [
+      { delay: 0, freq: 380, endFreq: 520, dur: 0.07 },
+      { delay: 0.09, freq: 440, endFreq: 620, dur: 0.07 },
+      { delay: 0.19, freq: 660, endFreq: 990, dur: 0.16 }
+    ];
+    pops.forEach(({ delay, freq, endFreq, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + delay);
+      osc.frequency.exponentialRampToValueAtTime(endFreq, now + delay + dur);
+
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.2, now + delay + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + delay);
+      osc.stop(now + delay + dur + 0.02);
+    });
+  }
+
+  /** 奇獸升級成功（RPG 經典上升星光音效） */
+  public playLevelUp() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [
+      { freq: 523.25, delay: 0, dur: 0.11 },
+      { freq: 587.33, delay: 0.09, dur: 0.11 },
+      { freq: 659.25, delay: 0.18, dur: 0.11 },
+      { freq: 783.99, delay: 0.27, dur: 0.13 },
+      { freq: 1046.5, delay: 0.39, dur: 0.45 },
+      { freq: 1318.51, delay: 0.48, dur: 0.5 }
+    ];
+
+    notes.forEach(({ freq, delay, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + delay);
+
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + delay);
+      osc.stop(now + delay + dur + 0.02);
+    });
+  }
+
+  /** 挑戰通關成功凱旋號角 */
+  public playVictoryFanfare() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [
+      { freq: 523.25, delay: 0, dur: 0.12 },
+      { freq: 659.25, delay: 0.1, dur: 0.12 },
+      { freq: 783.99, delay: 0.2, dur: 0.12 },
+      { freq: 1046.5, delay: 0.32, dur: 0.22 },
+      { freq: 783.99, delay: 0.52, dur: 0.12 },
+      { freq: 1046.5, delay: 0.64, dur: 0.55 }
+    ];
+
+    notes.forEach(({ freq, delay, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + delay);
+
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.24, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + delay);
+      osc.stop(now + delay + dur + 0.03);
+    });
+  }
+
+  /** 挑戰失敗柔和下行音效（明確辨識但不刺耳） */
+  public playDefeat() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [
+      { freq: 392.0, delay: 0, dur: 0.2 },     // G4
+      { freq: 369.99, delay: 0.2, dur: 0.2 },  // F#4
+      { freq: 349.23, delay: 0.4, dur: 0.2 },  // F4
+      { freq: 311.13, delay: 0.6, dur: 0.55 }  // Eb4
+    ];
+
+    notes.forEach(({ freq, delay, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + delay);
+      if (delay === 0.6) {
+        osc.frequency.exponentialRampToValueAtTime(280, now + delay + dur);
+      }
+
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.2, now + delay + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + delay);
+      osc.stop(now + delay + dur + 0.03);
+    });
+  }
+
+  /** 出戰夥伴發動連擊護盾阻擋音效 */
+  public playShieldBlock() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const freqs = [587.33, 880, 1174.66];
+    freqs.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.045);
+
+      gain.gain.setValueAtTime(0.001, now + idx * 0.045);
+      gain.gain.exponentialRampToValueAtTime(0.2, now + idx * 0.045 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.28);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + idx * 0.045);
+      osc.stop(now + idx * 0.045 + 0.3);
+    });
+  }
 }
 
 export const sound = new SoundManager();

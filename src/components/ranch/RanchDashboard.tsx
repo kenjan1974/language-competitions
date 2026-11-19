@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
@@ -15,17 +15,52 @@ import {
   ShieldAlert,
   Crown,
   Heart,
-  X
+  X,
+  Shield,
+  Timer,
+  Star
 } from 'lucide-react';
 import { db } from '../../db/database';
 import {
   BeastInstance,
   BeastSpecies,
-  BeastStage,
   PlayerProfile
 } from '../../types/game';
 import { BEAST_SPECIES_LIST } from '../../data/beasts';
 import { sound } from '../../utils/sound';
+import {
+  ELEMENT_META,
+  FEED_EXP_GAIN,
+  LevelUpSummary,
+  MAX_BEAST_LEVEL,
+  computeBeastPerks,
+  computeFeedOutcome,
+  getBeastLevel,
+  getExpRequiredForLevel,
+  getRanchMaxAuraSummary,
+  getStageDisplayInfo,
+  getStageForLevel,
+  getStageTitle,
+  resolveActiveCompanion
+} from '../../utils/beastPerks';
+import { BeastLevelUpModal } from './BeastLevelUpModal';
+
+const PET_SPEECH_LINES = [
+  '好舒服喔～💕',
+  '最喜歡小主人了！✨',
+  '蹭蹭～一起去贏競賽吧！',
+  '摸頭能量滿滿！🌟',
+  '我會全力守護你的連擊！🛡️',
+  '嘻嘻，好癢喔～😆'
+];
+
+interface BeastActionFx {
+  id: number;
+  beastId: string;
+  type: 'pet' | 'feed';
+  speech?: string;
+  expGain?: number;
+}
 
 interface RanchDashboardProps {
   profile: PlayerProfile;
@@ -51,22 +86,33 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   onOpenSettings
 }) => {
   const [selectedBeastId, setSelectedBeastId] = useState<string | null>(null);
-  const [jumpingId, setJumpingId] = useState<string | null>(null);
+  const [actionFx, setActionFx] = useState<BeastActionFx | null>(null);
   const [showGachaModal, setShowGachaModal] = useState(false);
   const [showBestiaryModal, setShowBestiaryModal] = useState(false);
   const [newlyHatchedModal, setNewlyHatchedModal] = useState<{
     beast: BeastInstance;
     species: BeastSpecies;
   } | null>(null);
+  const [levelUpModal, setLevelUpModal] = useState<LevelUpSummary | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const speciesMap = new Map<string, BeastSpecies>(
-    BEAST_SPECIES_LIST.map((s) => [s.speciesId, s])
+  const fxTimeoutRef = useRef<number | null>(null);
+
+  const speciesMap = useMemo(
+    () => new Map<string, BeastSpecies>(BEAST_SPECIES_LIST.map((s) => [s.speciesId, s])),
+    []
   );
 
   const eggs = beasts.filter((b) => b.stage === 'egg');
   const activeNestEggs = eggs.slice(0, 3);
   const hatchedBeasts = beasts.filter((b) => b.stage !== 'egg');
+
+  const activeCompanion = useMemo(
+    () => resolveActiveCompanion(profile, beasts, speciesMap),
+    [profile, beasts, speciesMap]
+  );
+
+  const maxAura = useMemo(() => getRanchMaxAuraSummary(beasts), [beasts]);
 
   const isSlimeCrisis = mistakeCount >= 8;
 
@@ -75,6 +121,29 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     setTimeout(() => {
       setToastMessage((prev) => (prev === msg ? null : prev));
     }, 2600);
+  };
+
+  const triggerActionFx = (fx: Omit<BeastActionFx, 'id'>, durationMs: number) => {
+    if (fxTimeoutRef.current) {
+      window.clearTimeout(fxTimeoutRef.current);
+    }
+    const id = Date.now() + Math.random();
+    setActionFx({ ...fx, id });
+    fxTimeoutRef.current = window.setTimeout(() => {
+      setActionFx((prev) => (prev && prev.id === id ? null : prev));
+    }, durationMs);
+  };
+
+  // 設定出戰夥伴
+  const handleSetActiveCompanion = async (instanceId: string) => {
+    sound.playClick();
+    await db.profile.update('default_player', {
+      activeBeastId: instanceId
+    });
+    const chosen = hatchedBeasts.find((b) => b.instanceId === instanceId);
+    if (chosen) {
+      showToast(`⚔️ 已指派「${chosen.nickname}」擔任出戰夥伴，陪你一起闖關！`);
+    }
   };
 
   // 使用孵蛋加速券 (+5 進度)
@@ -109,74 +178,80 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     const updatedBeast: BeastInstance = {
       ...egg,
       stage: 'baby',
+      level: 1,
       nickname: species.stages.baby.name,
       currentExp: 0
     };
 
     await db.beasts.put(updatedBeast);
+    if (!profile.activeBeastId) {
+      await db.profile.update('default_player', {
+        activeBeastId: updatedBeast.instanceId
+      });
+    }
+    setSelectedBeastId(updatedBeast.instanceId);
     setNewlyHatchedModal({ beast: updatedBeast, species });
   };
 
-  // 餵食靈氣牧草 (+15 EXP)
+  // 撫摸奇獸（播撒嬌音效 + 愛心飄散 + 語錄氣泡 + 搖擺彈跳動畫）
+  const handlePetBeast = (beast: BeastInstance) => {
+    sound.playPetPurr();
+    setSelectedBeastId(beast.instanceId);
+    const speech =
+      PET_SPEECH_LINES[Math.floor(Math.random() * PET_SPEECH_LINES.length)];
+    triggerActionFx(
+      {
+        beastId: beast.instanceId,
+        type: 'pet',
+        speech
+      },
+      1500
+    );
+  };
+
+  // 餵食靈氣牧草 (+15 EXP + 牧草飛入與光點動畫 + 每級升級成果 Modal)
   const handleFeedBeast = async (beast: BeastInstance) => {
     const species = speciesMap.get(beast.speciesId);
     if (!species) return;
+
+    const currentLevel = getBeastLevel(beast);
+    if (currentLevel >= MAX_BEAST_LEVEL) {
+      handlePetBeast(beast);
+      showToast(`👑 ${beast.nickname} 已經達到 Lv.${MAX_BEAST_LEVEL} MAX 滿級巔峰囉！`);
+      return;
+    }
 
     if (profile.forageCount <= 0) {
       showToast('靈氣牧草不足！快去挑戰字音字形關卡收集牧草吧！');
       return;
     }
 
-    if (beast.stage === 'awakened') {
-      sound.playCuteChirp();
-      setJumpingId(beast.instanceId);
-      setTimeout(() => setJumpingId(null), 700);
-      showToast(`${beast.nickname}已經是最高階傳說覺醒型態囉！`);
-      return;
-    }
+    sound.playFeedCrunch();
+    triggerActionFx(
+      {
+        beastId: beast.instanceId,
+        type: 'feed',
+        expGain: FEED_EXP_GAIN
+      },
+      1250
+    );
 
-    sound.playCuteChirp();
-    setJumpingId(beast.instanceId);
-    setTimeout(() => setJumpingId(null), 700);
-
-    const expGain = 15;
-    let nextExp = beast.currentExp + expGain;
-    let nextStage: BeastStage = beast.stage;
-    let nextNickname = beast.nickname;
-    let evolved = false;
-
-    if (beast.stage === 'baby' && nextExp >= species.stages.baby.expRequired) {
-      nextStage = 'adult';
-      nextExp = nextExp - species.stages.baby.expRequired;
-      nextNickname = species.stages.adult.name;
-      evolved = true;
-    } else if (beast.stage === 'adult' && nextExp >= species.stages.adult.expRequired) {
-      nextStage = 'awakened';
-      nextExp = 0;
-      nextNickname = species.stages.awakened.name;
-      evolved = true;
-    }
+    const { updatedBeast, leveledUp, levelUpSummary } = computeFeedOutcome(
+      beast,
+      species,
+      FEED_EXP_GAIN
+    );
 
     await db.profile.update('default_player', {
       forageCount: profile.forageCount - 1
     });
 
-    await db.beasts.update(beast.instanceId, {
-      stage: nextStage,
-      currentExp: nextExp,
-      nickname: nextNickname
-    });
+    await db.beasts.put(updatedBeast);
 
-    if (evolved) {
-      sound.playFanfare();
-      confetti({
-        particleCount: 90,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
-      showToast(`🌟 恭喜！進化為【${nextNickname}】！`);
-    } else {
-      showToast(`🌿 餵食成功！EXP +${expGain}`);
+    if (leveledUp && levelUpSummary) {
+      window.setTimeout(() => {
+        setLevelUpModal(levelUpSummary);
+      }, 420);
     }
   };
 
@@ -230,6 +305,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
       eggProgress: 0,
       eggTarget: chosen.eggStepsRequired,
       currentExp: 0,
+      level: 0,
       obtainedAt: Date.now()
     };
 
@@ -239,13 +315,11 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     setShowGachaModal(false);
   };
 
-  const getBeastStageDisplay = (beast: BeastInstance, species: BeastSpecies) => {
-    if (beast.stage === 'baby') return species.stages.baby;
-    if (beast.stage === 'adult') return species.stages.adult;
-    return species.stages.awakened;
-  };
-
-  const selectedBeast = hatchedBeasts.find((b) => b.instanceId === selectedBeastId) || hatchedBeasts[0] || null;
+  const selectedBeast =
+    hatchedBeasts.find((b) => b.instanceId === selectedBeastId) ||
+    activeCompanion?.beast ||
+    hatchedBeasts[0] ||
+    null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-5 flex flex-col gap-5 select-none">
@@ -370,16 +444,18 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
           <div className="text-left">
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/20 text-xs font-bold mb-2">
               <Sparkles className="w-3.5 h-3.5" />
-              8 題字音快問快答 + 3 題字形手寫
+              8 題字音快問快答 + 3 題字形手寫（60% 通關）
             </span>
             <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">
               出發！語文競賽大挑戰
             </h2>
             <p className="text-emerald-100 text-sm mt-1 font-medium">
-              每答對 1 題推進孵蛋 +1 步，並掉落金幣與靈氣牧草！
+              {activeCompanion
+                ? `出戰夥伴：${activeCompanion.stageInfo.emoji} ${activeCompanion.stageInfo.name} Lv.${activeCompanion.level}（+${activeCompanion.perks.extraSeconds}秒 / 獎勵+${activeCompanion.perks.rewardBonusPct}%）`
+                : '每答對 1 題推進孵蛋 +1 步，並掉落金幣與靈氣牧草！'}
             </p>
           </div>
-          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition">
+          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition shrink-0">
             <Swords className="w-9 h-9 text-white" />
           </div>
         </button>
@@ -559,16 +635,22 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
         {/* 神獸草地互動區 */}
         <div className="lg:col-span-7 bg-gradient-to-b from-emerald-100/80 via-emerald-50 to-teal-50 rounded-3xl p-5 shadow-md border-2 border-emerald-200 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <Sprout className="w-5 h-5 text-emerald-700" />
                 <h3 className="font-extrabold text-lg text-emerald-950">
                   奇幻神獸大草原 ({hatchedBeasts.length} 隻夥伴)
                 </h3>
               </div>
-              <span className="text-xs text-emerald-800 font-semibold">
-                點擊神獸互動或餵食「靈氣牧草」進化
-              </span>
+              {maxAura.maxedCount > 0 ? (
+                <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-extrabold">
+                  👑 滿級祝福：{maxAura.maxedCount} 隻（全牧場金幣 +{maxAura.globalCoinBonusPct}%）
+                </span>
+              ) : (
+                <span className="text-xs text-emerald-800 font-semibold">
+                  升等解鎖陪考技能，滿級 Lv.6 再送全牧場光環！
+                </span>
+              )}
             </div>
 
             {hatchedBeasts.length === 0 ? (
@@ -582,53 +664,100 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-1 pt-1">
                 {hatchedBeasts.map((beast) => {
                   const species = speciesMap.get(beast.speciesId);
                   if (!species) return null;
-                  const stageInfo = getBeastStageDisplay(beast, species);
+                  const level = getBeastLevel(beast);
+                  const stage = getStageForLevel(level);
+                  const stageInfo = getStageDisplayInfo(stage, species);
                   const isSelected = selectedBeast?.instanceId === beast.instanceId;
-                  const isJumping = jumpingId === beast.instanceId;
+                  const isActivePartner =
+                    activeCompanion?.beast.instanceId === beast.instanceId;
+                  const cardFx =
+                    actionFx && actionFx.beastId === beast.instanceId ? actionFx : null;
 
                   return (
                     <motion.div
                       key={beast.instanceId}
                       animate={
-                        isJumping
-                          ? { y: [0, -18, 0, -10, 0], scale: [1, 1.12, 1] }
-                          : { y: 0 }
+                        cardFx?.type === 'pet'
+                          ? {
+                              y: [0, -10, 0],
+                              scale: [1, 1.12, 0.96, 1.08, 1],
+                              rotate: [0, -5, 5, -3, 0]
+                            }
+                          : cardFx?.type === 'feed'
+                          ? { y: [0, -14, 0, -6, 0], scale: [1, 1.15, 0.95, 1] }
+                          : { y: 0, scale: 1, rotate: 0 }
                       }
-                      onClick={() => {
-                        sound.playCuteChirp();
-                        setSelectedBeastId(beast.instanceId);
-                        setJumpingId(beast.instanceId);
-                        setTimeout(() => setJumpingId(null), 600);
-                      }}
-                      className={`p-3.5 rounded-2xl cursor-pointer transition border-2 flex flex-col items-center text-center relative ${
+                      transition={{ duration: 0.55 }}
+                      onClick={() => handlePetBeast(beast)}
+                      className={`p-3.5 rounded-2xl cursor-pointer transition border-2 flex flex-col items-center text-center relative overflow-visible ${
                         isSelected
                           ? 'bg-white border-emerald-500 shadow-md ring-2 ring-emerald-300'
                           : 'bg-white/80 hover:bg-white border-emerald-100'
                       }`}
                     >
+                      {/* 出戰中徽章 */}
+                      {isActivePartner && (
+                        <span className="absolute -top-2 left-2 text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-extrabold shadow-sm flex items-center gap-0.5">
+                          <Swords className="w-2.5 h-2.5" />
+                          出戰中
+                        </span>
+                      )}
+
+                      {/* 等級徽章 */}
+                      <span
+                        className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                          level >= MAX_BEAST_LEVEL
+                            ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-white'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {level >= MAX_BEAST_LEVEL ? 'Lv.6 MAX' : `Lv.${level}`}
+                      </span>
+
                       {isSlimeCrisis && (
                         <span
-                          className="absolute top-2 right-2 text-xs bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full font-bold"
+                          className="absolute bottom-2 right-2 text-xs bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full font-bold"
                           title="被食字史萊姆困住"
                         >
                           👾
                         </span>
                       )}
-                      <div className="text-4xl my-1 select-none">{stageInfo.emoji}</div>
+
+                      {/* 卡片上的即時愛心 / 餵食特效 */}
+                      <AnimatePresence>
+                        {cardFx && (
+                          <motion.span
+                            key={cardFx.id}
+                            initial={{ opacity: 0, y: 6, scale: 0.6 }}
+                            animate={{ opacity: [0, 1, 1, 0], y: -26, scale: 1.2 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.95 }}
+                            className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 text-base font-extrabold whitespace-nowrap z-20"
+                          >
+                            {cardFx.type === 'pet'
+                              ? '❤️💕✨'
+                              : `🌿 +${cardFx.expGain} EXP`}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="text-4xl my-1.5 select-none">{stageInfo.emoji}</div>
                       <span className="font-extrabold text-sm text-slate-800 line-clamp-1">
                         {stageInfo.name}
                       </span>
                       <div className="flex items-center gap-1 mt-1">
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                          {beast.stage === 'baby'
-                            ? '幼獸期'
-                            : beast.stage === 'adult'
-                            ? '成體期'
-                            : '👑 覺醒傳說'}
+                        <span
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                            level >= MAX_BEAST_LEVEL
+                              ? 'bg-amber-100 text-amber-900'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {getStageTitle(stage, level)}
                         </span>
                       </div>
                     </motion.div>
@@ -638,72 +767,315 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
             )}
           </div>
 
-          {/* 當前選中神獸詳細資訊與餵食進化面板 */}
+          {/* 當前選中神獸詳細資訊、撫摸餵草動畫與出戰技能面板 */}
           {selectedBeast && speciesMap.get(selectedBeast.speciesId) && (
-            <div className="mt-4 bg-white rounded-2xl p-4 border-2 border-emerald-200 shadow-sm">
+            <div className="mt-4 bg-white rounded-2xl p-4 border-2 border-emerald-200 shadow-sm relative overflow-visible">
               {(() => {
                 const sp = speciesMap.get(selectedBeast.speciesId)!;
-                const info = getBeastStageDisplay(selectedBeast, sp);
-                const expNeeded =
-                  selectedBeast.stage === 'baby'
-                    ? sp.stages.baby.expRequired
-                    : selectedBeast.stage === 'adult'
-                    ? sp.stages.adult.expRequired
-                    : 0;
+                const level = getBeastLevel(selectedBeast);
+                const stage = getStageForLevel(level);
+                const info = getStageDisplayInfo(stage, sp);
+                const perks = computeBeastPerks(level, sp);
+                const elemMeta = ELEMENT_META[sp.element];
+                const expNeeded = getExpRequiredForLevel(level, sp);
                 const expPct =
                   expNeeded > 0
                     ? Math.min(100, Math.round((selectedBeast.currentExp / expNeeded) * 100))
                     : 100;
+                const isActivePartner =
+                  activeCompanion?.beast.instanceId === selectedBeast.instanceId;
+                const activeFx =
+                  actionFx && actionFx.beastId === selectedBeast.instanceId
+                    ? actionFx
+                    : null;
 
                 return (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-4xl shrink-0">
-                        {info.emoji}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-extrabold">
-                            {sp.rarity}
-                          </span>
-                          <h4 className="font-extrabold text-base text-slate-800">
-                            {info.name}
-                          </h4>
-                        </div>
-                        <p className="text-xs text-slate-600 mt-1">{info.description}</p>
-                        {expNeeded > 0 ? (
-                          <div className="mt-2">
-                            <div className="flex justify-between text-[11px] font-bold text-emerald-800 mb-1">
-                              <span>進化經驗值 (EXP)</span>
-                              <span>
-                                {selectedBeast.currentExp} / {expNeeded}
-                              </span>
-                            </div>
-                            <div className="w-48 sm:w-56 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="flex flex-col gap-3.5">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5 w-full sm:w-auto">
+                        {/* 可互動奇獸主頭像 + 撫摸/餵草動畫舞台 */}
+                        <div className="relative shrink-0">
+                          {/* 撫摸撒嬌語錄氣泡 */}
+                          <AnimatePresence>
+                            {activeFx?.type === 'pet' && activeFx.speech && (
+                              <motion.div
+                                key={`speech-${activeFx.id}`}
+                                initial={{ opacity: 0, y: 8, scale: 0.75 }}
+                                animate={{ opacity: 1, y: -12, scale: 1 }}
+                                exit={{ opacity: 0, y: -20, scale: 0.85 }}
+                                transition={{ duration: 0.25 }}
+                                className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 z-30 bg-rose-500 text-white text-xs font-extrabold px-3 py-1 rounded-full shadow-lg whitespace-nowrap"
+                              >
+                                {activeFx.speech}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* 撫摸飄浮愛心粒子 */}
+                          <AnimatePresence>
+                            {activeFx?.type === 'pet' && (
                               <div
-                                className="h-full bg-emerald-500 transition-all"
-                                style={{ width: `${expPct}%` }}
-                              />
-                            </div>
+                                key={`hearts-${activeFx.id}`}
+                                className="pointer-events-none absolute inset-0 z-20"
+                              >
+                                {[
+                                  { icon: '❤️', x: -30, y: -42, delay: 0 },
+                                  { icon: '💕', x: 30, y: -48, delay: 0.08 },
+                                  { icon: '✨', x: -42, y: -22, delay: 0.14 },
+                                  { icon: '💖', x: 6, y: -56, delay: 0.18 },
+                                  { icon: '🌟', x: 40, y: -24, delay: 0.22 }
+                                ].map((p, idx) => (
+                                  <motion.span
+                                    key={idx}
+                                    initial={{ opacity: 0, x: 0, y: 0, scale: 0.5 }}
+                                    animate={{
+                                      opacity: [0, 1, 1, 0],
+                                      x: p.x,
+                                      y: p.y,
+                                      scale: [0.6, 1.3, 0.9]
+                                    }}
+                                    transition={{
+                                      duration: 1.05,
+                                      delay: p.delay,
+                                      ease: 'easeOut'
+                                    }}
+                                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-lg"
+                                  >
+                                    {p.icon}
+                                  </motion.span>
+                                ))}
+                              </div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* 餵草飛入動畫 + 閃光粒子 + +15 EXP 浮字 */}
+                          <AnimatePresence>
+                            {activeFx?.type === 'feed' && (
+                              <div
+                                key={`feed-${activeFx.id}`}
+                                className="pointer-events-none absolute inset-0 z-20"
+                              >
+                                {/* 牧草飛向神獸嘴裡 */}
+                                <motion.span
+                                  initial={{ opacity: 0, x: 58, y: 26, scale: 1.4, rotate: 25 }}
+                                  animate={{
+                                    opacity: [0, 1, 1, 0],
+                                    x: [58, 16, 0],
+                                    y: [26, -6, 0],
+                                    scale: [1.4, 1.15, 0.25],
+                                    rotate: [25, -15, -45]
+                                  }}
+                                  transition={{ duration: 0.45, ease: 'easeIn' }}
+                                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-3xl"
+                                >
+                                  🌿
+                                </motion.span>
+
+                                {/* 吸收後的閃光粒子 */}
+                                {[
+                                  { icon: '✨', x: -32, y: -36 },
+                                  { icon: '🌟', x: 32, y: -38 },
+                                  { icon: '🍀', x: -36, y: 12 },
+                                  { icon: '⚡', x: 36, y: 10 }
+                                ].map((spFx, idx) => (
+                                  <motion.span
+                                    key={idx}
+                                    initial={{ opacity: 0, x: 0, y: 0, scale: 0.4 }}
+                                    animate={{
+                                      opacity: [0, 1, 0],
+                                      x: spFx.x,
+                                      y: spFx.y,
+                                      scale: [0.5, 1.25, 0.7]
+                                    }}
+                                    transition={{ duration: 0.75, delay: 0.25 }}
+                                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-lg"
+                                  >
+                                    {spFx.icon}
+                                  </motion.span>
+                                ))}
+
+                                {/* +15 EXP 浮動加分字 */}
+                                <motion.div
+                                  initial={{ opacity: 0, y: 0, scale: 0.7 }}
+                                  animate={{
+                                    opacity: [0, 1, 1, 0],
+                                    y: -52,
+                                    scale: [0.8, 1.2, 1]
+                                  }}
+                                  transition={{ duration: 1.05, delay: 0.18 }}
+                                  className="absolute left-1/2 -top-2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-black text-xs shadow-md whitespace-nowrap"
+                                >
+                                  +{activeFx.expGain} EXP!
+                                </motion.div>
+                              </div>
+                            )}
+                          </AnimatePresence>
+
+                          <motion.button
+                            type="button"
+                            onClick={() => handlePetBeast(selectedBeast)}
+                            animate={
+                              activeFx?.type === 'pet'
+                                ? {
+                                    scale: [1, 1.25, 0.88, 1.15, 1],
+                                    rotate: [0, -12, 12, -8, 0]
+                                  }
+                                : activeFx?.type === 'feed'
+                                ? {
+                                    scale: [1, 1.26, 0.9, 1.14, 1],
+                                    y: [0, -12, 2, -6, 0]
+                                  }
+                                : { scale: 1, rotate: 0, y: 0 }
+                            }
+                            transition={{ duration: 0.6 }}
+                            title="點我摸摸頭！"
+                            className={`w-20 h-20 rounded-2xl border-2 flex items-center justify-center text-5xl shadow-sm cursor-pointer ${
+                              activeFx?.type === 'pet'
+                                ? 'bg-rose-50 border-rose-300 ring-4 ring-rose-200/70'
+                                : activeFx?.type === 'feed'
+                                ? 'bg-amber-50 border-amber-300 ring-4 ring-emerald-200/80'
+                                : 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100/70'
+                            }`}
+                          >
+                            {info.emoji}
+                          </motion.button>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-extrabold">
+                              {sp.rarity}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-extrabold ${
+                                level >= MAX_BEAST_LEVEL
+                                  ? 'bg-amber-400 text-slate-950'
+                                  : 'bg-slate-800 text-white'
+                              }`}
+                            >
+                              Lv.{level} / {MAX_BEAST_LEVEL}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${elemMeta.badgeClass}`}
+                            >
+                              {elemMeta.emoji} {elemMeta.label}
+                            </span>
+                            <h4 className="font-extrabold text-base text-slate-800">
+                              {info.name}
+                            </h4>
                           </div>
-                        ) : (
-                          <p className="text-xs font-extrabold text-amber-600 mt-1.5">
-                            👑 已達成最高階傳說覺醒型態！
-                          </p>
-                        )}
+
+                          <p className="text-xs text-slate-600 mt-1">{info.description}</p>
+
+                          {expNeeded > 0 ? (
+                            <div className="mt-2">
+                              <div className="flex justify-between text-[11px] font-bold text-emerald-800 mb-1">
+                                <span>
+                                  升級進度（升 Lv.{level + 1}
+                                  {level + 1 === 3
+                                    ? '・進化成體！'
+                                    : level + 1 === 5
+                                    ? '・傳說覺醒！'
+                                    : level + 1 === 6
+                                    ? '・滿級巔峰！'
+                                    : ''}
+                                  ）
+                                </span>
+                                <span>
+                                  {selectedBeast.currentExp} / {expNeeded} EXP
+                                </span>
+                              </div>
+                              <div className="w-full max-w-xs h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                <motion.div
+                                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                                  animate={{ width: `${expPct}%` }}
+                                  transition={{ type: 'spring', stiffness: 180, damping: 20 }}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs font-extrabold text-amber-600 mt-1.5 flex items-center gap-1">
+                              <Crown className="w-3.5 h-3.5" />
+                              已達成 Lv.{MAX_BEAST_LEVEL} MAX 滿級巔峰！永久為全牧場提供 +5% 金幣祝福！
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 設為出戰夥伴按鈕 */}
+                      {isActivePartner ? (
+                        <span className="px-3.5 py-2 rounded-xl bg-indigo-100 border border-indigo-300 text-indigo-800 font-extrabold text-xs flex items-center gap-1.5 shrink-0">
+                          <Star className="w-4 h-4 fill-indigo-500 text-indigo-600" />
+                          目前出戰夥伴
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetActiveCompanion(selectedBeast.instanceId)}
+                          className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition"
+                        >
+                          <Swords className="w-4 h-4" />
+                          設為出戰夥伴
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 出戰夥伴技能加成一覽 */}
+                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-extrabold">
+                        <span className="px-2.5 py-1 rounded-lg bg-sky-100 text-sky-900 flex items-center gap-1">
+                          <Timer className="w-3.5 h-3.5 text-sky-600" />
+                          字音 +{perks.extraSeconds}秒
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-900 flex items-center gap-1">
+                          <Shield className="w-3.5 h-3.5 text-indigo-600" />
+                          連擊護盾 {perks.comboShields}次
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 flex items-center gap-1">
+                          <Coins className="w-3.5 h-3.5 text-amber-600" />
+                          金幣牧草 +{perks.rewardBonusPct}%
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-bold text-slate-600 flex items-start gap-1.5">
+                        <span
+                          className={`px-2 py-0.5 rounded-md shrink-0 ${
+                            perks.elementSkillUnlocked
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-slate-200 text-slate-600'
+                          }`}
+                        >
+                          {perks.elementSkillName}
+                        </span>
+                        <span className="pt-0.5">{perks.elementSkillDesc}</span>
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleFeedBeast(selectedBeast)}
-                      className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm shadow flex items-center justify-center gap-1.5 shrink-0 active:scale-95 transition"
-                    >
-                      <Heart className="w-4 h-4 fill-rose-300 text-rose-200" />
-                      {selectedBeast.stage === 'awakened'
-                        ? '摸摸神獸撒嬌'
-                        : `餵食靈氣牧草 (+15 EXP)`}
-                    </button>
+                    {/* 撫摸 & 餵草互動操作按鈕列 */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handlePetBeast(selectedBeast)}
+                        className="py-3 px-4 rounded-2xl bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 text-rose-700 font-extrabold text-sm flex items-center justify-center gap-1.5 active:scale-95 transition"
+                      >
+                        <Heart className="w-4 h-4 fill-rose-400 text-rose-500" />
+                        撫摸撒嬌（互動動畫）
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleFeedBeast(selectedBeast)}
+                        className={`py-3 px-4 rounded-2xl font-extrabold text-sm shadow flex items-center justify-center gap-1.5 active:scale-95 transition ${
+                          level >= MAX_BEAST_LEVEL
+                            ? 'bg-amber-400 hover:bg-amber-300 text-amber-950'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                        }`}
+                      >
+                        <Sprout className="w-4 h-4" />
+                        {level >= MAX_BEAST_LEVEL
+                          ? `👑 已達 Lv.${MAX_BEAST_LEVEL} MAX 滿級`
+                          : `餵食靈氣牧草 (+${FEED_EXP_GAIN} EXP｜剩 ${profile.forageCount})`}
+                      </button>
+                    </div>
                   </div>
                 );
               })()}
@@ -711,6 +1083,20 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
           )}
         </div>
       </div>
+
+      {/* 奇獸每一等級升級／進化成果動畫 Modal */}
+      <AnimatePresence>
+        {levelUpModal && (
+          <BeastLevelUpModal
+            summary={levelUpModal}
+            isActiveCompanion={
+              activeCompanion?.beast.instanceId === levelUpModal.beast.instanceId
+            }
+            onSetActiveCompanion={handleSetActiveCompanion}
+            onClose={() => setLevelUpModal(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 破殼慶祝 Modal */}
       <AnimatePresence>
@@ -888,21 +1274,35 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                           <div className="text-xs font-bold text-slate-700 mt-1">
                             {sp.stages.baby.name}
                           </div>
+                          <div className="text-[10px] font-bold text-slate-400">Lv.1~2</div>
                         </div>
                         <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
                           <div className="text-2xl">{isUnlocked ? sp.stages.adult.emoji : '❓'}</div>
                           <div className="text-xs font-bold text-slate-700 mt-1">
                             {sp.stages.adult.name}
                           </div>
+                          <div className="text-[10px] font-bold text-slate-400">Lv.3~4</div>
                         </div>
                         <div className="p-2 rounded-xl bg-amber-50/60 border border-amber-100">
                           <div className="text-2xl">{isUnlocked ? sp.stages.awakened.emoji : '❓'}</div>
                           <div className="text-xs font-bold text-amber-900 mt-1">
                             {sp.stages.awakened.name}
                           </div>
+                          <div className="text-[10px] font-bold text-amber-600">Lv.5~6 MAX</div>
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500 mt-2.5">
+                      {(() => {
+                        const maxPerks = computeBeastPerks(MAX_BEAST_LEVEL, sp);
+                        return (
+                          <div className="mt-2.5 p-2 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[11px] font-bold text-indigo-900">
+                            <span>滿級 Lv.6 夥伴技能（{maxPerks.elementSkillName}）：</span>
+                            <span className="font-semibold text-indigo-800">
+                              字音 +{maxPerks.extraSeconds}秒、護盾 {maxPerks.comboShields}次、獎勵 +{maxPerks.rewardBonusPct}%；{maxPerks.elementSkillDesc}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                      <p className="text-xs text-slate-500 mt-2">
                         {sp.stages.awakened.description}
                       </p>
                     </div>

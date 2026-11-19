@@ -51,6 +51,7 @@ export interface BeastInstance {
   eggProgress: number;         // 當 stage === 'egg' 時，目前已累積的答題孵化步數
   eggTarget: number;           // 孵化目標步數
   currentExp: number;          // 餵食牧草累積的經驗值
+  level?: number;              // 奇獸等級 (Lv.1 ~ Lv.6；舊存檔未設定時依 stage 自動推算)
   obtainedAt: number;
 }
 
@@ -66,4 +67,5 @@ export interface PlayerProfile {
   highCombo: number;
   handwritingMode: 'auto' | 'canvas_only'; // auto: 優先 HanziWriter 盲寫，失敗降級 Canvas; canvas_only: 一律自由手寫翻牌
   soundEnabled: boolean;
+  activeBeastId?: string | null; // 目前設為「出戰夥伴」陪考的神獸 instanceId
 }

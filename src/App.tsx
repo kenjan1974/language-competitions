@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { motion, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
 import {
   ArrowLeft,
   Trophy,
@@ -11,10 +10,14 @@ import {
   Zap,
   Egg,
   RotateCcw,
-  Home
+  Home,
+  Star,
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
 import { db, initializeDatabase } from './db/database';
-import { QuestionItem } from './types/game';
+import { BeastSpecies, QuestionItem } from './types/game';
+import { BEAST_SPECIES_LIST } from './data/beasts';
 import {
   generateStandardQuiz,
   generateSlimeBossQuiz,
@@ -23,8 +26,13 @@ import {
   QuizSessionData,
   QuizRewardSummary
 } from './services/quizEngine';
+import {
+  getRanchMaxAuraSummary,
+  resolveActiveCompanion
+} from './utils/beastPerks';
 import { PronunciationStage } from './components/quiz/PronunciationStage';
 import { CharacterWritingStage } from './components/quiz/CharacterWritingStage';
+import { ChallengeResultModal } from './components/quiz/ChallengeResultModal';
 import { RanchDashboard } from './components/ranch/RanchDashboard';
 import { MistakeNotebookModal } from './components/ranch/MistakeNotebookModal';
 import { SettingsModal } from './components/settings/SettingsModal';
@@ -46,7 +54,19 @@ export default function App() {
   const [maxCombo, setMaxCombo] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [fastBonusCount, setFastBonusCount] = useState(0);
+  const [shieldsRemaining, setShieldsRemaining] = useState(0);
+  const [shieldNotice, setShieldNotice] = useState<string | null>(null);
+  const [freePeeksRemaining, setFreePeeksRemaining] = useState(0);
   const [rewardSummary, setRewardSummary] = useState<QuizRewardSummary | null>(null);
+  const [showOutcomeModal, setShowOutcomeModal] = useState(false);
+
+  // 使用 Ref 同步最新計分，避免最後一題同步結算時讀取到舊的 state
+  const comboRef = useRef(0);
+  const maxComboRef = useRef(0);
+  const correctCountRef = useRef(0);
+  const fastBonusCountRef = useRef(0);
+  const shieldsRef = useRef(0);
+  const shieldNoticeTimerRef = useRef<number | null>(null);
 
   const [singlePracticeQuestion, setSinglePracticeQuestion] =
     useState<QuestionItem | null>(null);
@@ -61,6 +81,21 @@ export default function App() {
   const beasts = useLiveQuery(() => db.beasts.toArray(), [dbReady]);
   const questions = useLiveQuery(() => db.questions.toArray(), [dbReady]);
   const progressList = useLiveQuery(() => db.progress.toArray(), [dbReady]);
+
+  const speciesMap = useMemo(
+    () => new Map<string, BeastSpecies>(BEAST_SPECIES_LIST.map((s) => [s.speciesId, s])),
+    []
+  );
+
+  const activeCompanion = useMemo(() => {
+    if (!profile || !beasts) return null;
+    return resolveActiveCompanion(profile, beasts, speciesMap);
+  }, [profile, beasts, speciesMap]);
+
+  const maxAura = useMemo(
+    () => getRanchMaxAuraSummary(beasts ?? []),
+    [beasts]
+  );
 
   useEffect(() => {
     if (profile) {
@@ -82,15 +117,41 @@ export default function App() {
   const mistakeCount = progressList.filter((p) => p.proficiency === 1).length;
   const masteredCount = progressList.filter((p) => p.proficiency >= 2).length;
 
-  // 啟動標準 11 題挑戰 (8 字音 + 3 字形)
-  const handleStartStandardQuiz = async () => {
-    const session = await generateStandardQuiz();
-    setQuizSession(session);
+  const resetSessionCounters = () => {
+    comboRef.current = 0;
+    maxComboRef.current = 0;
+    correctCountRef.current = 0;
+    fastBonusCountRef.current = 0;
+    const initShields = activeCompanion?.perks.comboShields ?? 0;
+    const initFreePeeks = activeCompanion?.perks.freePeeks ?? 0;
+    shieldsRef.current = initShields;
+
     setCombo(0);
     setMaxCombo(0);
     setCorrectCount(0);
     setFastBonusCount(0);
+    setShieldsRemaining(initShields);
+    setShieldNotice(null);
+    setFreePeeksRemaining(initFreePeeks);
     setRewardSummary(null);
+    setShowOutcomeModal(false);
+  };
+
+  const triggerShieldNotice = (msg: string) => {
+    if (shieldNoticeTimerRef.current) {
+      window.clearTimeout(shieldNoticeTimerRef.current);
+    }
+    setShieldNotice(msg);
+    shieldNoticeTimerRef.current = window.setTimeout(() => {
+      setShieldNotice(null);
+    }, 2400);
+  };
+
+  // 啟動標準 11 題挑戰 (8 字音 + 3 字形)
+  const handleStartStandardQuiz = async () => {
+    const session = await generateStandardQuiz();
+    setQuizSession(session);
+    resetSessionCounters();
 
     if (session.pronunciationQuestions.length > 0) {
       setView('quiz_pronunciation');
@@ -103,16 +164,30 @@ export default function App() {
   const handleStartSlimeBossQuiz = async () => {
     const session = await generateSlimeBossQuiz();
     setQuizSession(session);
-    setCombo(0);
-    setMaxCombo(0);
-    setCorrectCount(0);
-    setFastBonusCount(0);
-    setRewardSummary(null);
+    resetSessionCounters();
 
     if (session.pronunciationQuestions.length > 0) {
       setView('quiz_pronunciation');
     } else if (session.characterQuestions.length > 0) {
       setView('quiz_character');
+    }
+  };
+
+  // 答錯時嘗試觸發連擊護盾
+  const handleComboBreakOrShield = () => {
+    if (comboRef.current > 0 && shieldsRef.current > 0) {
+      shieldsRef.current -= 1;
+      setShieldsRemaining(shieldsRef.current);
+      sound.playShieldBlock();
+      const buddyLabel = activeCompanion
+        ? `${activeCompanion.stageInfo.emoji} ${activeCompanion.stageInfo.name}`
+        : '出戰夥伴';
+      triggerShieldNotice(
+        `🛡️ ${buddyLabel} 發動連擊護盾！成功保住 ${comboRef.current} COMBO！（剩餘 ${shieldsRef.current} 次）`
+      );
+    } else {
+      comboRef.current = 0;
+      setCombo(0);
     }
   };
 
@@ -124,15 +199,20 @@ export default function App() {
   ) => {
     await recordQuestionAttempt(questionId, isCorrect, false);
     if (isCorrect) {
-      const nextCombo = combo + 1;
+      const nextCombo = comboRef.current + 1;
+      comboRef.current = nextCombo;
+      maxComboRef.current = Math.max(maxComboRef.current, nextCombo);
+      correctCountRef.current += 1;
+
       setCombo(nextCombo);
-      setMaxCombo((prev) => Math.max(prev, nextCombo));
-      setCorrectCount((prev) => prev + 1);
+      setMaxCombo(maxComboRef.current);
+      setCorrectCount(correctCountRef.current);
       if (isFast) {
-        setFastBonusCount((prev) => prev + 1);
+        fastBonusCountRef.current += 1;
+        setFastBonusCount(fastBonusCountRef.current);
       }
     } else {
-      setCombo(0);
+      handleComboBreakOrShield();
     }
   };
 
@@ -144,12 +224,16 @@ export default function App() {
   ) => {
     await recordQuestionAttempt(questionId, isCorrect, peeked);
     if (isCorrect && !peeked) {
-      const nextCombo = combo + 1;
+      const nextCombo = comboRef.current + 1;
+      comboRef.current = nextCombo;
+      maxComboRef.current = Math.max(maxComboRef.current, nextCombo);
+      correctCountRef.current += 1;
+
       setCombo(nextCombo);
-      setMaxCombo((prev) => Math.max(prev, nextCombo));
-      setCorrectCount((prev) => prev + 1);
+      setMaxCombo(maxComboRef.current);
+      setCorrectCount(correctCountRef.current);
     } else {
-      setCombo(0);
+      handleComboBreakOrShield();
     }
   };
 
@@ -162,7 +246,7 @@ export default function App() {
     }
   };
 
-  // 結算整局獎勵
+  // 結算整局獎勵並彈出「通關成功／挑戰失敗」動畫 Modal
   const handleFinishQuizSession = async () => {
     if (!quizSession) return;
     const totalQuestions =
@@ -172,19 +256,26 @@ export default function App() {
     const rewards = await settleQuizRewards({
       mode: quizSession.mode,
       totalQuestions,
-      correctCount,
-      maxCombo,
-      fastBonusCount
+      correctCount: correctCountRef.current,
+      maxCombo: maxComboRef.current,
+      fastBonusCount: fastBonusCountRef.current,
+      companionPerks: activeCompanion?.perks ?? null,
+      companionName: activeCompanion?.stageInfo.name,
+      globalCoinBonusPct: maxAura.globalCoinBonusPct
     });
 
     setRewardSummary(rewards);
     setView('quiz_result');
-    sound.playFanfare();
-    confetti({
-      particleCount: 100,
-      spread: 80,
-      origin: { y: 0.6 }
-    });
+    setShowOutcomeModal(true);
+  };
+
+  const handleRetryCurrentMode = () => {
+    setShowOutcomeModal(false);
+    if (quizSession?.mode === 'slime_boss') {
+      handleStartSlimeBossQuiz();
+    } else {
+      handleStartStandardQuiz();
+    }
   };
 
   // 從錯題本點擊任一題直接練寫該字
@@ -193,6 +284,11 @@ export default function App() {
     setSinglePracticeQuestion(q);
     setView('single_practice');
   };
+
+  const totalQuizQuestions = quizSession
+    ? quizSession.pronunciationQuestions.length +
+      quizSession.characterQuestions.length
+    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-teal-50/50 to-amber-50/40 text-slate-800 pb-10">
@@ -203,6 +299,7 @@ export default function App() {
             type="button"
             onClick={() => {
               sound.playClick();
+              setShowOutcomeModal(false);
               setView('ranch');
             }}
             className="px-4 py-2 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-sm shadow-sm border border-slate-200 flex items-center gap-1.5 transition"
@@ -214,7 +311,7 @@ export default function App() {
           {quizSession && view !== 'quiz_result' && view !== 'single_practice' && (
             <span className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800">
               {quizSession.mode === 'slime_boss'
-                ? '👾 守護牧場：除魔特訓'
+                ? '👾 守護牧場：除魔魔王戰'
                 : '🏆 標準 11 題語文競賽挑戰'}
             </span>
           )}
@@ -241,6 +338,9 @@ export default function App() {
         <PronunciationStage
           questions={quizSession.pronunciationQuestions}
           combo={combo}
+          activeCompanion={activeCompanion}
+          shieldsRemaining={shieldsRemaining}
+          shieldNotice={shieldNotice}
           onQuestionResult={handlePronunciationResult}
           onStageComplete={handlePronunciationStageComplete}
         />
@@ -251,6 +351,11 @@ export default function App() {
         <CharacterWritingStage
           questions={quizSession.characterQuestions}
           defaultMode={profile.handwritingMode}
+          activeCompanion={activeCompanion}
+          freePeeksRemaining={freePeeksRemaining}
+          onConsumeFreePeek={() =>
+            setFreePeeksRemaining((prev) => Math.max(0, prev - 1))
+          }
           onQuestionResult={handleCharacterResult}
           onStageComplete={handleFinishQuizSession}
         />
@@ -272,39 +377,93 @@ export default function App() {
         />
       )}
 
-      {/* 過關結算慶祝畫面 */}
+      {/* 過關／失敗戰利品詳情畫面 */}
       {view === 'quiz_result' && quizSession && rewardSummary && (
         <div className="max-w-xl mx-auto px-4 py-8">
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-3xl p-6 md:p-8 shadow-2xl border-4 border-amber-300 text-center flex flex-col items-center gap-4"
+            className={`bg-white rounded-3xl p-6 md:p-8 shadow-2xl border-4 text-center flex flex-col items-center gap-4 ${
+              rewardSummary.passed ? 'border-amber-300' : 'border-rose-300'
+            }`}
           >
-            <div className="w-20 h-20 rounded-3xl bg-amber-100 text-amber-500 flex items-center justify-center shadow-inner">
-              <Trophy className="w-11 h-11" />
+            <div
+              className={`w-20 h-20 rounded-3xl flex items-center justify-center shadow-inner ${
+                rewardSummary.passed
+                  ? 'bg-amber-100 text-amber-500'
+                  : 'bg-rose-100 text-rose-500'
+              }`}
+            >
+              {rewardSummary.passed ? (
+                <Trophy className="w-11 h-11" />
+              ) : (
+                <ShieldAlert className="w-11 h-11" />
+              )}
             </div>
 
             <div>
-              <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs">
+              <span
+                className={`px-3.5 py-1 rounded-full font-extrabold text-xs ${
+                  rewardSummary.passed
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-rose-100 text-rose-700'
+                }`}
+              >
                 {quizSession.mode === 'slime_boss'
-                  ? rewardSummary.slimeDefeated
-                    ? '🎉 成功擊退食字史萊姆！'
-                    : '💪 除魔特訓完成！'
-                  : '🎊 語文競賽挑戰完成！'}
+                  ? rewardSummary.passed
+                    ? '🎉 成功擊退食字史萊姆魔王！'
+                    : '👾 魔王挑戰失敗（未達 60% 通關線）'
+                  : rewardSummary.passed
+                  ? '🎊 語文競賽挑戰通關成功！'
+                  : '💪 挑戰失敗（未達 60% 通關線）'}
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 mt-2">
-                答對 {correctCount} /{' '}
-                {quizSession.pronunciationQuestions.length +
-                  quizSession.characterQuestions.length}{' '}
-                題
+
+              {/* 星等展示 */}
+              <div className="flex items-center justify-center gap-1.5 mt-2.5">
+                {[1, 2, 3].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-6 h-6 ${
+                      rewardSummary.stars >= s
+                        ? 'text-amber-400 fill-amber-400'
+                        : 'text-slate-200 fill-slate-100'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 mt-1">
+                答對 {correctCount} / {totalQuizQuestions} 題（{rewardSummary.accuracy}%）
               </h2>
               <p className="text-sm text-slate-500 font-semibold mt-1">
                 本局最高連擊：{maxCombo} Combo ｜ 疾風秒答加分：{fastBonusCount} 次
               </p>
             </div>
 
+            {/* 出戰夥伴獎勵加碼摘要 */}
+            {(rewardSummary.companionBonusCoins > 0 ||
+              rewardSummary.companionBonusForage > 0 ||
+              rewardSummary.companionBonusGems > 0 ||
+              rewardSummary.companionBonusEggSteps > 0) && (
+              <div className="w-full p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold flex flex-wrap items-center justify-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span>
+                  夥伴加成
+                  {rewardSummary.companionName ? `（${rewardSummary.companionName}）` : ''}：
+                  {rewardSummary.companionBonusCoins > 0 &&
+                    ` +${rewardSummary.companionBonusCoins} 金幣`}
+                  {rewardSummary.companionBonusForage > 0 &&
+                    ` +${rewardSummary.companionBonusForage} 牧草`}
+                  {rewardSummary.companionBonusGems > 0 &&
+                    ` +${rewardSummary.companionBonusGems} 寶石`}
+                  {rewardSummary.companionBonusEggSteps > 0 &&
+                    ` +${rewardSummary.companionBonusEggSteps} 孵蛋步`}
+                </span>
+              </div>
+            )}
+
             {/* 掉落資源統計 */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full my-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full my-1">
               <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col items-center">
                 <Coins className="w-6 h-6 text-amber-500 mb-1" />
                 <span className="font-extrabold text-lg text-amber-900">
@@ -368,17 +527,37 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   sound.playClick();
-                  handleStartStandardQuiz();
+                  handleRetryCurrentMode();
                 }}
-                className="py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-base shadow-lg flex items-center justify-center gap-2 transition"
+                className={`py-3.5 rounded-2xl text-white font-extrabold text-base shadow-lg flex items-center justify-center gap-2 transition ${
+                  rewardSummary.passed
+                    ? 'bg-emerald-600 hover:bg-emerald-500'
+                    : 'bg-rose-600 hover:bg-rose-500'
+                }`}
               >
                 <RotateCcw className="w-5 h-5" />
-                再戰一局！
+                {rewardSummary.passed ? '再戰一局！' : '不服輸！再挑戰一次'}
               </button>
             </div>
           </motion.div>
         </div>
       )}
+
+      {/* 通關成功／挑戰失敗全螢幕動畫 Modal */}
+      <AnimatePresence>
+        {showOutcomeModal && quizSession && rewardSummary && (
+          <ChallengeResultModal
+            mode={quizSession.mode}
+            correctCount={correctCount}
+            totalQuestions={totalQuizQuestions}
+            maxCombo={maxCombo}
+            rewardSummary={rewardSummary}
+            activeCompanion={activeCompanion}
+            onViewRewards={() => setShowOutcomeModal(false)}
+            onRetry={handleRetryCurrentMode}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 個人錯題本與題庫 Modal */}
       <AnimatePresence>

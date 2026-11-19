@@ -14,6 +14,7 @@ import {
   Layers
 } from 'lucide-react';
 import { QuestionItem } from '../../types/game';
+import { ActiveCompanionData } from '../../utils/beastPerks';
 import { sound } from '../../utils/sound';
 
 interface CharacterWritingStageProps {
@@ -22,6 +23,9 @@ interface CharacterWritingStageProps {
   onQuestionResult: (questionId: string, isCorrect: boolean, peeked: boolean) => void;
   onStageComplete: () => void;
   isSinglePractice?: boolean;
+  activeCompanion?: ActiveCompanionData | null;
+  freePeeksRemaining?: number;
+  onConsumeFreePeek?: () => void;
 }
 
 export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
@@ -29,7 +33,10 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
   defaultMode,
   onQuestionResult,
   onStageComplete,
-  isSinglePractice = false
+  isSinglePractice = false,
+  activeCompanion = null,
+  freePeeksRemaining = 0,
+  onConsumeFreePeek
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeMode, setActiveMode] = useState<'hanzi' | 'canvas'>(
@@ -37,6 +44,7 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
   );
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [hasPeeked, setHasPeeked] = useState(false);
+  const [usedFreePeekOnCurrent, setUsedFreePeekOnCurrent] = useState(false);
   const [isPeekingNow, setIsPeekingNow] = useState(false);
   const [totalMistakes, setTotalMistakes] = useState(0);
   const [strokeMessage, setStrokeMessage] = useState<string>('請在米字格中依標準筆順寫出目標國字');
@@ -56,6 +64,7 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
   // 重置單題狀態
   useEffect(() => {
     setHasPeeked(false);
+    setUsedFreePeekOnCurrent(false);
     setIsPeekingNow(false);
     setTotalMistakes(0);
     setHanziCompleted(false);
@@ -241,11 +250,21 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
     sound.playClick();
   };
 
-  // 偷看一秒功能（使用後自動標記為需複習錯題）
+  // 偷看一秒功能（若有光系神獸聖光免費偷看次數，優先免費發動不記錯題）
   const handlePeekOneSecond = () => {
     if (isPeekingNow) return;
-    sound.playClick();
-    setHasPeeked(true);
+
+    if (!isSinglePractice && freePeeksRemaining > 0 && !usedFreePeekOnCurrent) {
+      sound.playShieldBlock();
+      setUsedFreePeekOnCurrent(true);
+      onConsumeFreePeek?.();
+    } else if (!usedFreePeekOnCurrent) {
+      sound.playClick();
+      setHasPeeked(true);
+    } else {
+      sound.playClick();
+    }
+
     setIsPeekingNow(true);
 
     if (activeMode === 'hanzi' && writerInstanceRef.current) {
@@ -291,7 +310,7 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
     <div className="max-w-3xl mx-auto px-4 py-4 flex flex-col gap-4 select-none">
       {/* 頂部首領關卡標題列 */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 text-white rounded-2xl p-4 shadow-md">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className="px-3 py-1 rounded-full bg-amber-400 text-slate-950 font-extrabold text-sm flex items-center gap-1.5">
             <ShieldAlert className="w-4 h-4" />
             {isSinglePractice ? '錯題本手寫特訓' : '第二波：首領字形破陣'}
@@ -299,6 +318,14 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
           <span className="font-bold text-indigo-100">
             第 <span className="text-amber-300 text-lg">{currentIndex + 1}</span> / {questions.length} 題
           </span>
+          {activeCompanion && !isSinglePractice && (
+            <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-xs font-extrabold flex items-center gap-1.5">
+              <span className="text-base">{activeCompanion.stageInfo.emoji}</span>
+              <span>
+                {activeCompanion.stageInfo.name} Lv.{activeCompanion.level} 助陣中
+              </span>
+            </span>
+          )}
         </div>
 
         {/* 切換盲寫筆順 / 自由手寫模式按鈕 */}
@@ -333,6 +360,12 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
               出處：{currentQuestion.sources.join('、')}
             </span>
           </div>
+
+          {usedFreePeekOnCurrent && (
+            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold">
+              ✨ 已發動光系夥伴「聖光免費偷看」（不計入錯題！）
+            </span>
+          )}
 
           {hasPeeked && (
             <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">
@@ -500,10 +533,16 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
                   <button
                     type="button"
                     onClick={handlePeekOneSecond}
-                    className="px-4 py-2.5 rounded-2xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-sm flex items-center gap-1.5 shadow-sm transition active:scale-95"
+                    className={`px-4 py-2.5 rounded-2xl font-bold text-sm flex items-center gap-1.5 shadow-sm transition active:scale-95 ${
+                      !isSinglePractice && freePeeksRemaining > 0 && !usedFreePeekOnCurrent
+                        ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-950 ring-2 ring-amber-300'
+                        : 'bg-amber-100 hover:bg-amber-200 text-amber-900'
+                    }`}
                   >
                     <Eye className="w-4 h-4" />
-                    偷看一秒（記為需複習）
+                    {!isSinglePractice && freePeeksRemaining > 0 && !usedFreePeekOnCurrent
+                      ? `✨ 聖光免費偷看（剩 ${freePeeksRemaining} 次，不記錯題）`
+                      : '偷看一秒（記為需複習）'}
                   </button>
                 )}
 
@@ -558,10 +597,16 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
                 <button
                   type="button"
                   onClick={handlePeekOneSecond}
-                  className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-sm flex items-center gap-1"
+                  className={`px-3.5 py-2 rounded-xl font-bold text-sm flex items-center gap-1 ${
+                    !isSinglePractice && freePeeksRemaining > 0 && !usedFreePeekOnCurrent
+                      ? 'bg-amber-300 hover:bg-amber-200 text-amber-950'
+                      : 'bg-amber-100 hover:bg-amber-200 text-amber-900'
+                  }`}
                 >
                   <Eye className="w-4 h-4" />
-                  偷看一秒
+                  {!isSinglePractice && freePeeksRemaining > 0 && !usedFreePeekOnCurrent
+                    ? `✨ 免費偷看 (${freePeeksRemaining})`
+                    : '偷看一秒'}
                 </button>
               </div>
 

@@ -1,7 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Flame, Timer, Zap, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import {
+  Flame,
+  Timer,
+  Zap,
+  CheckCircle2,
+  XCircle,
+  Sparkles,
+  Shield
+} from 'lucide-react';
 import { QuestionItem } from '../../types/game';
+import { ActiveCompanionData } from '../../utils/beastPerks';
 import { sound } from '../../utils/sound';
 
 interface PronunciationStageProps {
@@ -9,20 +18,29 @@ interface PronunciationStageProps {
   onQuestionResult: (questionId: string, isCorrect: boolean, isFast: boolean) => void;
   onStageComplete: () => void;
   combo: number;
+  activeCompanion?: ActiveCompanionData | null;
+  shieldsRemaining?: number;
+  shieldNotice?: string | null;
 }
 
-const QUESTION_TIME_LIMIT = 10; // 每題限時 10 秒
+const BASE_QUESTION_TIME_LIMIT = 10; // 每題基礎限時 10 秒
 
 export const PronunciationStage: React.FC<PronunciationStageProps> = ({
   questions,
   onQuestionResult,
   onStageComplete,
-  combo
+  combo,
+  activeCompanion = null,
+  shieldsRemaining = 0,
+  shieldNotice = null
 }) => {
+  const extraSeconds = activeCompanion?.perks.extraSeconds ?? 0;
+  const effectiveTimeLimit = BASE_QUESTION_TIME_LIMIT + extraSeconds;
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_LIMIT);
+  const [timeLeft, setTimeLeft] = useState(effectiveTimeLimit);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | 'timeout' | null>(null);
 
   const timerRef = useRef<number | null>(null);
@@ -32,12 +50,12 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
     setSelectedOption(null);
     setIsLocked(false);
     setFeedback(null);
-    setTimeLeft(QUESTION_TIME_LIMIT);
+    setTimeLeft(effectiveTimeLimit);
 
     const startTime = Date.now();
     timerRef.current = window.setInterval(() => {
       const elapsed = (Date.now() - startTime) / 1000;
-      const remaining = Math.max(0, QUESTION_TIME_LIMIT - elapsed);
+      const remaining = Math.max(0, effectiveTimeLimit - elapsed);
       setTimeLeft(remaining);
 
       if (remaining <= 0) {
@@ -71,7 +89,7 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
     setSelectedOption(option);
 
     const isCorrect = option === currentQuestion.targetZhuyin;
-    const isFast = timeLeft >= 6;
+    const isFast = timeLeft >= effectiveTimeLimit * 0.55;
 
     if (isCorrect) {
       setFeedback('correct');
@@ -100,13 +118,13 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
     return null;
   }
 
-  const timePercent = Math.max(0, Math.min(100, (timeLeft / QUESTION_TIME_LIMIT) * 100));
+  const timePercent = Math.max(0, Math.min(100, (timeLeft / effectiveTimeLimit) * 100));
   const options = currentQuestion.options || [currentQuestion.targetZhuyin];
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4 flex flex-col gap-5 select-none">
-      {/* 頂部波次與連擊狀態列 */}
-      <div className="flex items-center justify-between bg-white/90 backdrop-blur rounded-2xl p-4 shadow-sm border border-emerald-100">
+    <div className="max-w-3xl mx-auto px-4 py-4 flex flex-col gap-4 select-none">
+      {/* 頂部波次、出戰夥伴與連擊狀態列 */}
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-white/90 backdrop-blur rounded-2xl p-4 shadow-sm border border-emerald-100">
         <div className="flex items-center gap-3">
           <span className="px-3 py-1 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center gap-1.5">
             <Zap className="w-4 h-4" />
@@ -117,32 +135,70 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
           </span>
         </div>
 
-        {/* Combo 徽章 */}
-        <AnimatePresence mode="popLayout">
-          {combo > 0 && (
-            <motion.div
-              key={combo}
-              initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold shadow-md"
-            >
-              <Flame className="w-5 h-5 fill-yellow-200 text-yellow-100 animate-bounce" />
-              <span>{combo} COMBO!</span>
-              <span className="text-xs bg-white/25 px-2 py-0.5 rounded-full">
-                {Math.min(5, 1 + Math.floor(combo / 2))}x 靈氣
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 出戰夥伴狀態徽章 */}
+          {activeCompanion && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold">
+              <span className="text-base">{activeCompanion.stageInfo.emoji}</span>
+              <span>
+                {activeCompanion.stageInfo.name} Lv.{activeCompanion.level}
               </span>
-            </motion.div>
+              {shieldsRemaining > 0 && (
+                <span className="ml-1 inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[11px]">
+                  <Shield className="w-3 h-3" />
+                  x{shieldsRemaining}
+                </span>
+              )}
+            </div>
           )}
-        </AnimatePresence>
+
+          {/* Combo 徽章 */}
+          <AnimatePresence mode="popLayout">
+            {combo > 0 && (
+              <motion.div
+                key={combo}
+                initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
+                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold shadow-md"
+              >
+                <Flame className="w-5 h-5 fill-yellow-200 text-yellow-100 animate-bounce" />
+                <span>{combo} COMBO!</span>
+                <span className="text-xs bg-white/25 px-2 py-0.5 rounded-full">
+                  {Math.min(5, 1 + Math.floor(combo / 2))}x 靈氣
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* 10 秒倒數計時條 */}
+      {/* 連擊護盾發動特效提示 */}
+      <AnimatePresence>
+        {shieldNotice && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: -8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="bg-gradient-to-r from-indigo-600 to-sky-500 text-white px-4 py-2.5 rounded-2xl shadow-lg font-extrabold text-sm flex items-center justify-center gap-2"
+          >
+            <Shield className="w-5 h-5 fill-sky-200 text-white animate-bounce" />
+            <span>{shieldNotice}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 倒數計時條（含出戰夥伴延長秒數） */}
       <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100">
         <div className="flex items-center justify-between text-xs font-bold mb-1.5 px-1">
-          <span className="flex items-center gap-1 text-slate-600">
+          <span className="flex items-center gap-1.5 text-slate-600">
             <Timer className="w-4 h-4 text-emerald-600" />
             疾風限時倒數
+            {extraSeconds > 0 && activeCompanion && (
+              <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[11px] font-extrabold">
+                {activeCompanion.stageInfo.emoji} +{extraSeconds}秒加成
+              </span>
+            )}
           </span>
           <span className={timeLeft <= 3 ? 'text-rose-600 font-extrabold animate-pulse' : 'text-emerald-700'}>
             {timeLeft.toFixed(1)} 秒
@@ -151,9 +207,9 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
         <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden">
           <div
             className={`h-full transition-all duration-100 rounded-full ${
-              timeLeft > 5
+              timeLeft > effectiveTimeLimit * 0.5
                 ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
-                : timeLeft > 2.5
+                : timeLeft > effectiveTimeLimit * 0.25
                 ? 'bg-gradient-to-r from-amber-400 to-orange-500'
                 : 'bg-gradient-to-r from-rose-500 to-red-600'
             }`}

@@ -10,11 +10,13 @@ import {
   Sparkles
 } from 'lucide-react';
 import { QuizRewardSummary } from '../../services/quizEngine';
+import { BossEnemy } from '../../types/game';
 import { ActiveCompanionData } from '../../utils/beastPerks';
 import { sound } from '../../utils/sound';
 
 interface ChallengeResultModalProps {
-  mode: 'standard' | 'slime_boss';
+  mode: 'standard' | 'slime_boss' | 'boss_battle';
+  boss?: BossEnemy;
   correctCount: number;
   totalQuestions: number;
   maxCombo: number;
@@ -26,6 +28,7 @@ interface ChallengeResultModalProps {
 
 export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
   mode,
+  boss,
   correctCount,
   totalQuestions,
   maxCombo,
@@ -35,7 +38,9 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
   onRetry
 }) => {
   const { passed, stars, passThreshold, accuracy } = rewardSummary;
-  const isBoss = mode === 'slime_boss';
+  const isBoss = mode === 'slime_boss' || mode === 'boss_battle';
+  const bossEmoji = mode === 'boss_battle' && boss ? boss.emoji : '👾';
+  const bossName = mode === 'boss_battle' && boss ? boss.name : '食字史萊姆';
 
   useEffect(() => {
     if (passed) {
@@ -149,7 +154,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                     transition={{ duration: 0.9 }}
                     className="relative w-24 h-24 rounded-full bg-amber-100 border-4 border-amber-300 flex items-center justify-center text-6xl shadow-lg"
                   >
-                    <span>👾</span>
+                    <span>{bossEmoji}</span>
                     <motion.span
                       animate={{ scale: [0.8, 1.3, 0.9], opacity: [0.8, 1, 0.8] }}
                       transition={{ repeat: Infinity, duration: 0.9 }}
@@ -187,7 +192,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                     transition={{ repeat: Infinity, duration: 1.3 }}
                     className="relative w-24 h-24 rounded-full bg-rose-950/90 border-4 border-rose-500 flex items-center justify-center text-6xl shadow-xl"
                   >
-                    <span>👾</span>
+                    <span>{bossEmoji}</span>
                     <span className="absolute -top-2 -right-2 text-2xl">😈</span>
                   </motion.div>
                 ) : (
@@ -220,10 +225,10 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
           >
             {passed
               ? isBoss
-                ? '🎉 成功擊退魔王！'
+                ? `🎉 成功擊退${bossName}！`
                 : '🎊 挑戰通關成功！'
               : isBoss
-              ? '👾 魔王溜走了…挑戰失敗'
+              ? `👾 ${bossName}未倒下…挑戰失敗`
               : '💪 差一點點！挑戰失敗'}
           </h2>
 

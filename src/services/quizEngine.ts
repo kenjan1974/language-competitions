@@ -54,12 +54,41 @@ export function shuffleArray<T>(arr: T[]): T[] {
 }
 
 /**
- * 100% 題庫推進保證抽題演算法：
- * 1. 個人常錯題 (proficiency === 1)：優先抽 30%（強制複習錯題）
- * 2. 未測高頻必考題 (proficiency === 0 && frequency >= 2)：優先抽 40%
- * 3. 未測一般新題 (proficiency === 0 && frequency < 2)：優先抽 30%
- * 4. 若上述「常錯 + 未測新題」不足，互相遞補（確保只要還有沒測過的新題，100% 優先出新題，絕不鬼打牆！）
- * 5. 唯有當所有新題都已經通過 (proficiency >= 2) 時，才從已熟悉題庫中抽取作為總複習。
+ * 近期出題冷卻記憶緩衝區（避免連續好幾場測驗出現相同題目或同一個考點字）
+ */
+const RECENT_ID_HISTORY_LIMIT = 80;
+const RECENT_CHAR_HISTORY_LIMIT = 40;
+const MISTAKE_COOLDOWN_MS = 10 * 60 * 1000; // 錯題至少間隔 10 分鐘才在一般測驗再次抽到
+
+const recentQuestionIds: string[] = [];
+const recentTargetChars: string[] = [];
+
+function recordRecentlyShown(questions: QuestionItem[]): void {
+  for (const q of questions) {
+    const idIdx = recentQuestionIds.indexOf(q.id);
+    if (idIdx !== -1) recentQuestionIds.splice(idIdx, 1);
+    recentQuestionIds.push(q.id);
+    if (recentQuestionIds.length > RECENT_ID_HISTORY_LIMIT) {
+      recentQuestionIds.shift();
+    }
+
+    if (q.targetChar) {
+      const charIdx = recentTargetChars.indexOf(q.targetChar);
+      if (charIdx !== -1) recentTargetChars.splice(charIdx, 1);
+      recentTargetChars.push(q.targetChar);
+      if (recentTargetChars.length > RECENT_CHAR_HISTORY_LIMIT) {
+        recentTargetChars.shift();
+      }
+    }
+  }
+}
+
+/**
+ * 100% 題庫推進保證 ＋ 低重複率智慧防撞抽題演算法：
+ * 1. 自動過濾近期剛出過的題目 (recentQuestionIds) 與近期考點字 (recentTargetChars)，同一場測驗內亦不重複考點字。
+ * 2. 個人常錯題 (proficiency === 1)：僅在已超過冷卻時間 (10分鐘) 且非近期剛出過時，每場最多穿插 1 題溫習（集中特訓交給「除魔特訓」）。
+ * 3. 未測新題 (proficiency === 0)：90%~100% 優先抽取未測過的新題（高頻題約占 35%、一般新題約占 65%，大幅擴展新題覆蓋面）。
+ * 4. 唯有當所有新題都已經通過 (proficiency >= 2) 時，才從已熟悉題庫中依最久未複習順序抽取總複習。
  */
 function pickWeightedQuestions(
   pool: QuestionItem[],
@@ -68,72 +97,116 @@ function pickWeightedQuestions(
 ): QuestionItem[] {
   if (count <= 0) return [];
   if (pool.length <= count) {
-    return shuffleArray(pool).map(formatQuestionOptions);
+    const all = shuffleArray(pool).map(formatQuestionOptions);
+    recordRecentlyShown(all);
+    return all;
   }
 
-  const bucketMistake: QuestionItem[] = [];
-  const bucketUnseenHighFreq: QuestionItem[] = [];
-  const bucketUnseenNormal: QuestionItem[] = [];
+  const now = Date.now();
+  const recentIdSet = new Set(recentQuestionIds);
+  const recentCharSet = new Set(recentTargetChars);
+
+  const bucketMistakeReady: QuestionItem[] = [];
+  const bucketMistakeRecent: QuestionItem[] = [];
+  const bucketUnseenHighFreqFresh: QuestionItem[] = [];
+  const bucketUnseenNormalFresh: QuestionItem[] = [];
+  const bucketUnseenRecent: QuestionItem[] = [];
   const bucketMasteredReview: QuestionItem[] = [];
 
   for (const q of pool) {
     const prog = progressMap.get(q.id);
     const prof: ProficiencyLevel = prog ? prog.proficiency : 0;
+    const isRecentId = recentIdSet.has(q.id);
+    const isRecentChar = recentCharSet.has(q.targetChar);
+    const timeSinceReview = prog?.lastReviewedAt ? now - prog.lastReviewedAt : Infinity;
 
     if (prof === 1) {
-      bucketMistake.push(q);
-    } else if (prof === 0 && q.frequency >= 2) {
-      bucketUnseenHighFreq.push(q);
+      if (!isRecentId && !isRecentChar && timeSinceReview >= MISTAKE_COOLDOWN_MS) {
+        bucketMistakeReady.push(q);
+      } else {
+        bucketMistakeRecent.push(q);
+      }
     } else if (prof === 0) {
-      bucketUnseenNormal.push(q);
+      if (isRecentId || isRecentChar) {
+        bucketUnseenRecent.push(q);
+      } else if (q.frequency >= 2) {
+        bucketUnseenHighFreqFresh.push(q);
+      } else {
+        bucketUnseenNormalFresh.push(q);
+      }
     } else {
       bucketMasteredReview.push(q);
     }
   }
 
-  const shuffledMistake = shuffleArray(bucketMistake);
-  const shuffledUnseenHigh = shuffleArray(bucketUnseenHighFreq);
-  const shuffledUnseenNormal = shuffleArray(bucketUnseenNormal);
-  const shuffledMastered = shuffleArray(bucketMasteredReview);
+  const shuffledMistakeReady = shuffleArray(bucketMistakeReady);
+  const shuffledMistakeRecent = shuffleArray(bucketMistakeRecent);
+  const shuffledUnseenHigh = shuffleArray(bucketUnseenHighFreqFresh);
+  const shuffledUnseenNormal = shuffleArray(bucketUnseenNormalFresh);
+  const shuffledUnseenRecent = shuffleArray(bucketUnseenRecent);
+
+  // 已熟悉題目優先挑「最久沒測過」且不在近期清單中的題目
+  const sortedMastered = shuffleArray(bucketMasteredReview).sort((a, b) => {
+    const aRecent = recentIdSet.has(a.id) ? 1 : 0;
+    const bRecent = recentIdSet.has(b.id) ? 1 : 0;
+    if (aRecent !== bRecent) return aRecent - bRecent;
+    const aTime = progressMap.get(a.id)?.lastReviewedAt ?? 0;
+    const bTime = progressMap.get(b.id)?.lastReviewedAt ?? 0;
+    return aTime - bTime;
+  });
 
   const selected = new Map<string, QuestionItem>();
+  const usedTargetChars = new Set<string>();
 
-  const targetMistake = Math.min(shuffledMistake.length, Math.ceil(count * 0.3));
+  // 一般測驗最多穿插 1 題已冷卻完畢的常錯題，把大部分名額留給全新題目！
+  const targetMistake = Math.min(shuffledMistakeReady.length, count >= 4 ? 1 : 0);
   const remainingSlots = count - targetMistake;
-  const targetUnseenHigh = Math.ceil(remainingSlots * 0.55);
+  const targetUnseenHigh = Math.min(
+    shuffledUnseenHigh.length,
+    Math.ceil(remainingSlots * 0.35)
+  );
   const targetUnseenNormal = remainingSlots - targetUnseenHigh;
 
-  const takeFrom = (list: QuestionItem[], limit: number) => {
+  const takeFrom = (list: QuestionItem[], limit: number, avoidSameChar: boolean = true) => {
     let taken = 0;
     for (const item of list) {
       if (taken >= limit || selected.size >= count) break;
-      if (!selected.has(item.id)) {
-        selected.set(item.id, item);
-        taken++;
+      if (selected.has(item.id)) continue;
+      if (avoidSameChar && item.targetChar && usedTargetChars.has(item.targetChar)) {
+        continue;
       }
+      selected.set(item.id, item);
+      if (item.targetChar) usedTargetChars.add(item.targetChar);
+      taken++;
     }
   };
 
-  takeFrom(shuffledMistake, targetMistake);
-  takeFrom(shuffledUnseenHigh, targetUnseenHigh);
-  takeFrom(shuffledUnseenNormal, targetUnseenNormal);
+  takeFrom(shuffledMistakeReady, targetMistake, true);
+  takeFrom(shuffledUnseenHigh, targetUnseenHigh, true);
+  takeFrom(shuffledUnseenNormal, targetUnseenNormal, true);
 
-  // 若某個未測池不足，優先從其他「未測新題」與「常錯題」遞補，最後才用已熟悉題目補滿
-  const fallbackOrder = [
-    ...shuffledUnseenHigh,
+  // 第一階段遞補：優先從所有「未測新題」遞補（仍維持同場不重複考點字）
+  const unseenFallback = [
     ...shuffledUnseenNormal,
-    ...shuffledMistake,
-    ...shuffledMastered
+    ...shuffledUnseenHigh,
+    ...shuffledUnseenRecent
   ];
+  takeFrom(unseenFallback, count - selected.size, true);
 
-  for (const item of fallbackOrder) {
-    if (selected.size >= count) break;
-    if (!selected.has(item.id)) {
-      selected.set(item.id, item);
-    }
-  }
+  // 第二階段遞補：若未測新題已快見底，允許同考點字的新題或已冷卻錯題、最後才用已熟悉題目補滿
+  const finalFallback = [
+    ...shuffledUnseenNormal,
+    ...shuffledUnseenHigh,
+    ...shuffledUnseenRecent,
+    ...shuffledMistakeReady,
+    ...sortedMastered,
+    ...shuffledMistakeRecent
+  ];
+  takeFrom(finalFallback, count - selected.size, false);
 
-  return shuffleArray(Array.from(selected.values())).map(formatQuestionOptions);
+  const finalQuestions = shuffleArray(Array.from(selected.values())).map(formatQuestionOptions);
+  recordRecentlyShown(finalQuestions);
+  return finalQuestions;
 }
 
 function formatQuestionOptions(q: QuestionItem): QuestionItem {
@@ -308,10 +381,10 @@ export async function recordQuestionAttempt(
     if (proficiency === 0) {
       proficiency = 2; // 初見即答對 -> 熟悉通過
     } else if (proficiency === 1) {
-      if (consecutiveCorrect >= 3) {
-        proficiency = 2;
+      if (consecutiveCorrect >= 2) {
+        proficiency = 2; // 常錯題連續答對 2 次即晉升為熟悉，避免反覆鬼打牆
       }
-    } else if (proficiency === 2 && consecutiveCorrect >= 5) {
+    } else if (proficiency === 2 && consecutiveCorrect >= 4) {
       proficiency = 3; // 精通
     }
   } else {

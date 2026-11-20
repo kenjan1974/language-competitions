@@ -35,7 +35,7 @@ export async function initializeDatabase(): Promise<void> {
   initPromise = (async () => {
     await db.open();
 
-    // 1. 載入或同步完整種子題庫 (src/data/questions.json，共 789 題歷屆完整題庫)
+    // 1. 載入或同步完整種子題庫 (src/data/questions.json，共 3,457 題歷屆完整題庫：字音 1,710 題 + 字形 1,747 題)
     const typedSeedQuestions = seedQuestions as QuestionItem[];
     const existingCount = await db.questions.count();
     if (existingCount < typedSeedQuestions.length) {

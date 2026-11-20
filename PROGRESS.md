@@ -1,9 +1,9 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：Phase 7 雙版本完整合併完成（已將另一台主機的「🕹️ 魔王機台討伐戰 / 3 卡槽神獸卡匣 / 七大魔王 / 100% 階段里程碑 / 智慧動態三大練功模式」與本機「通關失敗動畫 / 撫摸餵草互動 / Lv.1~Lv.6 升級成果動畫 / 出戰夥伴技能加成」完整合併，並修正日常挑戰通關必定發放加速券）
-- **最後更新時間**：2026-11-19
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：合併版本已通過 `tsc --noEmit` 與 `vite build` 驗證，可供小朋友於 iPad 實機試玩驗收並決定是否推送至 `origin/main`。
+- **目前階段**：Phase 8 完整歷屆題庫大擴充（共 3,457 題：字音 1,710 題 + 字形 1,747 題）＋ 低重複率智慧防撞抽題演算法 ＋ 牧場神獸排序功能完成
+- **最後更新時間**：2026-11-20
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：所有 22 份歷屆試卷（97~113 年全國賽國小組 + 109~113 大義國中）已匯入 `src/data/questions.json` 並歸檔至 `raw_pdfs/processed`，可直接啟動或部署體驗。
 
 ---
 
@@ -57,6 +57,13 @@
 
 ## AI Agent 交接日誌 (Handoff Log)
 > 每次 Agent 結束工作前，請在下方新增一筆紀錄（由新到舊排列）：
+
+### 2026-11-20 - Hatched Beasts Sorting Toolbar Upgrade
+- **完成任務**：
+  - 已先 `git fetch` 並同步至 `origin/main` 最新版本 (`fd8f342`)。
+  - 在牧場主畫面「我的神獸卡匣收藏」區域 ([RanchDashboard.tsx](file:///C:/code/projects/language-competitions/src/components/ranch/RanchDashboard.tsx)) 新增排序工具列，支援依 **「👑 稀有度 (SSR➔N)」、「⭐ 等級 (Lv.6➔Lv.1)」、「🕒 收集時間 (新➔舊)」、「🔥 屬性 (火/水/木/光/星)」** 四種維度排序，並可點擊切換升冪／降冪排列，且於每張神獸卡匣左上角同步顯示稀有度與屬性圖示。
+- **修改檔案**：
+  - `src/components/ranch/RanchDashboard.tsx`, `PROGRESS.md`
 
 ### 2026-11-19 - Merge Arcade Boss Battle & UX Polish + Speed Ticket Fix
 - **完成任務**：

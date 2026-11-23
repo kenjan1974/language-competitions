@@ -346,7 +346,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
       });
       setSelectedBeastId(scout.instanceId);
       showToast(
-        `🛡️ 已切換【斥候小兵探路陣】！派出「${scout.nickname} (Lv.${lv})」先鋒試探：主力大將 100% 免受降級或消滅，小兵過關還能獲得 +15 EXP 實戰經驗！`
+        `🛡️ 已切換【斥候小兵探路陣】！派出「${scout.nickname} (Lv.${lv})」先鋒試探：主力大將 100% 免受降級或重傷休養，小兵過關還能獲得 +15 EXP 實戰經驗！`
       );
     } else {
       const general = findBestGeneralCandidate(beasts);
@@ -885,7 +885,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                       【{activeCompanion.beast.rarity}】{activeCompanion.stageInfo.name} (Lv.
                       {activeCompanion.level})
                     </strong>{' '}
-                    — 就算遇到陌生難題失誤，後方 Lv.6 大將也完全不會掉級或被消滅；若探路通關，小兵直接獲{' '}
+                    — 就算遇到陌生難題失誤，後方 Lv.6 大將也完全不會掉級或進入重傷休養；若探路通關，小兵直接獲{' '}
                     <strong className="text-emerald-700">+15 EXP 實戰晉升經驗</strong>！
                   </>
                 ) : (
@@ -898,7 +898,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                     — 享有字音 +{activeCompanion.perks.extraSeconds}秒、護盾{' '}
                     {activeCompanion.perks.comboShields}次，且通關額外享{' '}
                     <strong className="text-amber-700">+25% 統帥金幣與牧草加碼</strong>
-                    ！（⚠️ 答對率 &lt;50% 大將降級、&lt;20% 陣亡消滅）
+                    ！（⚠️ 答對率 &lt;50% 大將降級、&lt;20% 🩹重傷休養，不會消失）
                   </>
                 )
               ) : (

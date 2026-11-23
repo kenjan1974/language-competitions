@@ -773,7 +773,7 @@ export async function settleQuizRewards(params: {
   // 戰敗戰損懲罰機制：
   // - 若採用「🛡️ 斥候小兵探路陣」：主力大將留在後營受保護，僅由先鋒斥候小兵承擔戰損風險！
   // - 若採用「⚔️ 主力大將決戰陣」：參戰的主力大將與出戰卡槽共同承擔戰損風險！
-  // 1. 若答對率低於 20% (隨意亂猜慘敗)：參戰的奇獸其中之一力竭被消滅（從牧場移除）！
+  // 1. 若答對率低於 20% (隨意亂猜慘敗)：參戰的奇獸其中之一降 1 級並進入「🩹 重傷休養」狀態（不刪除，答對 12 題或餵食 2 株牧草可康復）！
   // 2. 若挑戰失敗且答對率低於 50% (20% <= accuracy < 50%)：參戰的奇獸其中之一損耗 1 個等級！
   let nextActiveBeastId = profile?.activeBeastId;
   let nextBattleDeckIds = profile?.battleDeckIds;

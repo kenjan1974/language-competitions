@@ -254,7 +254,7 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
                 神獸卡匣對戰機台 & 100% 制霸殿堂
               </h2>
               <p className="text-xs text-indigo-200 font-semibold">
-                收集神獸卡匣 ➔ 餵牧草升級升星 ➔ 打倒歷屆大魔王！（⚠️ 注意：挑戰答對率低於 50% 參戰奇獸會降級，低於 20% 參戰奇獸之一會被消滅！）
+                收集神獸卡匣 ➔ 餵牧草升級升星 ➔ 打倒歷屆大魔王！（⚠️ 一般挑戰答對率 &lt;50% 參戰奇獸會降級、&lt;20% 進入「🩹 重傷休養」不會消失；越級試打下一關魔王失敗免受戰損！）
               </p>
             </div>
           </div>

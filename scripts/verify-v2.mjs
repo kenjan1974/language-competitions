@@ -197,6 +197,23 @@ function runTests() {
     );
   });
 
+  check('所有 UI 元件皆已清除舊版「陣亡消滅／會被消滅」過時文案，統一為「重傷休養」', () => {
+    const uiFiles = [
+      'src/App.tsx',
+      'src/components/ranch/RanchDashboard.tsx',
+      'src/components/ranch/BossArenaModal.tsx',
+      'src/components/ranch/BeastStorageModal.tsx',
+      'src/components/quiz/ChallengeResultModal.tsx'
+    ];
+    for (const rel of uiFiles) {
+      const content = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
+      assert.ok(
+        !/陣亡消滅|會被消滅|或被消滅|或消滅/.test(content),
+        `Leftover deletion UI wording found in ${rel}`
+      );
+    }
+  });
+
   console.log(`\n🎉 全部 ${passedChecks} 項自動化驗證測試 100% 通過！`);
 }
 

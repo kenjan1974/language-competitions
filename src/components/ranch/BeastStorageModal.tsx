@@ -336,7 +336,7 @@ export const BeastStorageModal: React.FC<BeastStorageModalProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-slate-600 font-semibold mt-0.5">
-                把暫不升級或重複的奇獸放進倉庫，不僅牧場更清爽，且在倉庫中免受戰敗降級或消滅風險！
+                把暫不升級或重複的奇獸放進倉庫，不僅牧場更清爽，且在倉庫中免受戰敗降級或重傷休養風險！
               </p>
             </div>
           </div>
@@ -358,7 +358,7 @@ export const BeastStorageModal: React.FC<BeastStorageModalProps> = ({
           <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              戰損保護機制：若挑戰答對率低於 50% 會損耗參戰奇獸等級，低於 20% 參戰奇獸之一會被消滅；倉庫內的備用奇獸可隨時替補！
+              戰損保護機制：若挑戰答對率低於 50% 會損耗參戰奇獸等級，低於 20% 參戰奇獸之一會進入「🩹 重傷休養」（不會消失，答題或餵牧草即可康復）；倉庫內的備用奇獸可隨時替補！
             </span>
           </div>
 

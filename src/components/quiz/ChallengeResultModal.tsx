@@ -306,14 +306,14 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                   <span className="text-[10px] font-black text-rose-300 mt-0.5">
                     Lv.{battlePenalty.previousLevel}
                   </span>
-                  {/* 覆蓋在中間的骷髏消滅印記 */}
+                  {/* 覆蓋在中間的重傷休養印記 */}
                   <motion.div
                     initial={{ scale: 2.2, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.35, type: 'spring', stiffness: 260 }}
                     className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-rose-600 border-2 border-white flex items-center justify-center text-xl shadow-lg"
                   >
-                    💀
+                    🩹
                   </motion.div>
                 </motion.div>
 
@@ -579,7 +579,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
             >
               <div className="flex items-start gap-2.5">
                 <span className="text-3xl shrink-0">
-                  {isDestroyed ? '💀' : '💔'}
+                  {isDestroyed ? '🩹' : '💔'}
                 </span>
                 <div className="flex-1">
                   <div className="text-sm font-black text-white flex items-center justify-between flex-wrap gap-1">

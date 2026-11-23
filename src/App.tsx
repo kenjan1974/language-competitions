@@ -23,7 +23,7 @@ import {
   BossEnemy,
   QuestionItem
 } from './types/game';
-import { BEAST_SPECIES_LIST } from './data/beasts';
+import { BEAST_SPECIES_LIST, getBestiaryBondsSummary } from './data/beasts';
 import {
   ELEMENT_META as BOSS_ELEMENT_META,
   calculateDeckVsBossPower,
@@ -125,6 +125,11 @@ export default function App() {
     []
   );
 
+  const bestiaryBonds = useMemo(
+    () => getBestiaryBondsSummary(beasts ?? [], profile?.unlockedSpeciesIds),
+    [beasts, profile?.unlockedSpeciesIds]
+  );
+
   const activeCompanion = useMemo(() => {
     if (!profile || !beasts) return null;
     const base = resolveActiveCompanion(profile, beasts, speciesMap);
@@ -136,11 +141,19 @@ export default function App() {
       perks: {
         ...base.perks,
         extraSeconds:
-          Math.round((base.perks.extraSeconds + subSynergy.bonusSeconds) * 10) / 10,
-        rewardBonusPct: base.perks.rewardBonusPct + subSynergy.bonusCoinsPct
+          Math.round(
+            (base.perks.extraSeconds +
+              subSynergy.bonusSeconds +
+              bestiaryBonds.totalBonusSeconds) *
+              10
+          ) / 10,
+        rewardBonusPct:
+          base.perks.rewardBonusPct +
+          subSynergy.bonusCoinsPct +
+          bestiaryBonds.totalBonusCoinPct
       }
     };
-  }, [profile, beasts, speciesMap]);
+  }, [profile, beasts, speciesMap, bestiaryBonds]);
 
   const maxAura = useMemo(
     () => getRanchMaxAuraSummary(beasts ?? []),
@@ -306,7 +319,8 @@ export default function App() {
     const { effectivePower } = calculateDeckVsBossPower(
       activeDeck,
       boss,
-      speciesMap
+      speciesMap,
+      bestiaryBonds.totalBonusCpPct
     );
 
     // 若卡組戰力達標，約答對 8~9 題可擊破魔王；若戰力不足則受魔王護盾減傷

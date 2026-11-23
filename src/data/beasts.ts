@@ -1132,3 +1132,164 @@ export function pickSmartEggSpecies(params: {
 
   return weighted[weighted.length - 1].species;
 }
+
+/**
+ * 🌠 星魂定向許願池演算法（保底未收錄新品種）：
+ * 1. 100% 優先從目前已達標解鎖世代 (`unlockMasteredCount <= masteredCount`) 中，篩選出「尚未擁有過」的奇獸品種。
+ * 2. 若有多種未收錄奇獸，優先加權最新世代與高稀有度品種。
+ * 3. 若當前已解鎖世代已 100% 全數收錄，則從最高世代的 SR / SSR 中隨機召喚一顆高階蛋。
+ */
+export function pickUnownedWishEggSpecies(params: {
+  masteredCount: number;
+  ownedBeasts: BeastInstance[];
+  unlockedSpeciesIds?: string[];
+}): { species: BeastSpecies; isGuaranteedNew: boolean } {
+  const { masteredCount, ownedBeasts, unlockedSpeciesIds = [] } = params;
+  const unlockedPool = getUnlockedSpeciesPool(masteredCount);
+  const ownedSet = new Set<string>([
+    ...ownedBeasts.map((b) => b.speciesId),
+    ...unlockedSpeciesIds
+  ]);
+
+  // 先找連蛋跟圖鑑都還沒收錄過的全新奇獸
+  let unowned = unlockedPool.filter((s) => !ownedSet.has(s.speciesId));
+  if (unowned.length === 0) {
+    // 次選：目前牧場＋倉庫中沒有實體的品種
+    const activeOwnedSet = new Set(ownedBeasts.map((b) => b.speciesId));
+    unowned = unlockedPool.filter((s) => !activeOwnedSet.has(s.speciesId));
+  }
+
+  if (unowned.length > 0) {
+    const sorted = [...unowned].sort(
+      (a, b) => (b.generation ?? 1) - (a.generation ?? 1)
+    );
+    const topGen = sorted[0].generation ?? 1;
+    const topGenCandidates = sorted.filter((s) => (s.generation ?? 1) === topGen);
+    const pool = topGenCandidates.length > 0 ? topGenCandidates : sorted;
+    return {
+      species: pool[Math.floor(Math.random() * pool.length)],
+      isGuaranteedNew: true
+    };
+  }
+
+  // 若當前已解鎖世代 100% 全部擁有，保底給最高世代的 SR/SSR
+  const highTier = unlockedPool.filter(
+    (s) => s.rarity === 'SSR' || s.rarity === 'SR'
+  );
+  const fallbackPool = highTier.length > 0 ? highTier : unlockedPool;
+  return {
+    species: fallbackPool[Math.floor(Math.random() * fallbackPool.length)],
+    isGuaranteedNew: false
+  };
+}
+
+export interface GenerationBondStatus {
+  generation: number;
+  title: string;
+  badgeClass: string;
+  unlockMasteredCount: number;
+  totalSpecies: number;
+  collectedSpecies: number;
+  isHalfCompleted: boolean;
+  isCompleted: boolean;
+  bonusCpPct: number;
+  bonusCoinPct: number;
+  bonusSeconds: number;
+}
+
+export interface BestiaryBondsSummary {
+  bonds: GenerationBondStatus[];
+  completedGenerationsCount: number;
+  totalCollectedSpecies: number;
+  totalBonusCpPct: number;
+  totalBonusCoinPct: number;
+  totalBonusSeconds: number;
+}
+
+/**
+ * 🔗 計算 10 大世代「圖鑑套卡羈絆系統」永久加成：
+ * - 每個世代只要集滿半數品種，即可開啟「初階世代共鳴」（戰力 +3%、金幣 +2%）；
+ * - 集滿該世代全部品種，開啟「完全世代羈絆」（戰力 +8%、金幣 +6%、字音思考 +0.2 秒）！
+ * - 不論奇獸放在牧場草地、收在倉庫、甚至已轉化為星魂（紀錄於 unlockedSpeciesIds），圖鑑羈絆皆永久生效！
+ */
+export function getBestiaryBondsSummary(
+  beasts: BeastInstance[],
+  unlockedSpeciesIds: string[] = []
+): BestiaryBondsSummary {
+  const collectedSet = new Set<string>(unlockedSpeciesIds);
+  for (const b of beasts) {
+    if (b.stage !== 'egg') {
+      collectedSet.add(b.speciesId);
+    }
+  }
+
+  const bonds: GenerationBondStatus[] = [];
+  let completedGenerationsCount = 0;
+  let totalBonusCpPct = 0;
+  let totalBonusCoinPct = 0;
+  let totalBonusSeconds = 0;
+
+  for (let gen = 1; gen <= 10; gen++) {
+    const meta = GENERATION_META[gen];
+    const genSpecies = BEAST_SPECIES_LIST.filter((s) => (s.generation ?? 1) === gen);
+    const totalSpecies = genSpecies.length;
+    const collectedSpecies = genSpecies.filter((s) =>
+      collectedSet.has(s.speciesId)
+    ).length;
+
+    const isCompleted = totalSpecies > 0 && collectedSpecies >= totalSpecies;
+    const isHalfCompleted =
+      totalSpecies > 0 && collectedSpecies >= Math.ceil(totalSpecies / 2);
+
+    const bonusCpPct = isCompleted ? 8 : isHalfCompleted ? 3 : 0;
+    const bonusCoinPct = isCompleted ? 6 : isHalfCompleted ? 2 : 0;
+    const bonusSeconds = isCompleted ? 0.2 : 0;
+
+    if (isCompleted) completedGenerationsCount += 1;
+    totalBonusCpPct += bonusCpPct;
+    totalBonusCoinPct += bonusCoinPct;
+    totalBonusSeconds += bonusSeconds;
+
+    bonds.push({
+      generation: gen,
+      title: meta?.title || `第 ${gen} 世代`,
+      badgeClass: meta?.badgeClass || 'bg-slate-100 text-slate-800',
+      unlockMasteredCount: meta?.unlockMasteredCount ?? 0,
+      totalSpecies,
+      collectedSpecies,
+      isHalfCompleted,
+      isCompleted,
+      bonusCpPct,
+      bonusCoinPct,
+      bonusSeconds
+    });
+  }
+
+  return {
+    bonds,
+    completedGenerationsCount,
+    totalCollectedSpecies: collectedSet.size,
+    totalBonusCpPct,
+    totalBonusCoinPct,
+    totalBonusSeconds: Math.round(totalBonusSeconds * 10) / 10
+  };
+}
+
+/** 計算將單隻重複奇獸轉化為「🌟 奇獸星魂」可獲得的數量（依稀有度與等級加權） */
+export function getBeastStarDustValue(beast: BeastInstance, level: number): number {
+  const baseByRarity: Record<Rarity, number> = {
+    N: 8,
+    R: 18,
+    SR: 38,
+    SSR: 80
+  };
+  const stepByRarity: Record<Rarity, number> = {
+    N: 3,
+    R: 6,
+    SR: 12,
+    SSR: 22
+  };
+  const base = baseByRarity[beast.rarity] ?? 10;
+  const lvBonus = Math.max(0, level - 1) * (stepByRarity[beast.rarity] ?? 4);
+  return base + lvBonus;
+}

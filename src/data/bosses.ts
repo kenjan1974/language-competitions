@@ -7,7 +7,7 @@ import {
   MilestoneGoal,
   Rarity
 } from '../types/game';
-import { BEAST_SPECIES_LIST } from './beasts';
+import { BEAST_SPECIES_LIST, getBestiaryBondsSummary } from './beasts';
 import { getBeastLevel, getStageForLevel } from '../utils/beastPerks';
 
 /** 五大元素屬性設定與技能名稱（街機卡匣風格） */
@@ -130,11 +130,12 @@ export function getResolvedBattleDeck(
   return chosen;
 }
 
-/** 計算 3 張出戰卡匣對上指定魔王時的總戰力（含屬性克制 1.5 倍加成） */
+/** 計算 3 張出戰卡匣對上指定魔王時的總戰力（含屬性克制 1.5 倍加成與圖鑑世代羈絆加成） */
 export function calculateDeckVsBossPower(
   deck: BeastInstance[],
   boss: BossEnemy | null,
-  speciesMap: Map<string, BeastSpecies>
+  speciesMap: Map<string, BeastSpecies>,
+  bondBonusCpPct: number = 0
 ): {
   basePower: number;
   effectivePower: number;
@@ -156,16 +157,28 @@ export function calculateDeckVsBossPower(
     }
   }
 
+  if (bondBonusCpPct > 0) {
+    const mult = 1 + bondBonusCpPct / 100;
+    basePower = Math.round(basePower * mult);
+    effectivePower = Math.round(effectivePower * mult);
+  }
+
   return { basePower, effectivePower, counterCount };
 }
 
-/** 計算玩家出戰卡組總戰力 */
+/** 計算玩家出戰卡組總戰力（含圖鑑羈絆加成） */
 export function calculateTeamCombatPower(
   beasts: BeastInstance[],
-  savedDeckIds?: string[]
+  savedDeckIds?: string[],
+  unlockedSpeciesIds?: string[]
 ): number {
   const deck = getResolvedBattleDeck(beasts, savedDeckIds);
-  return deck.reduce((sum, b) => sum + getSingleBeastPower(b), 0);
+  const raw = deck.reduce((sum, b) => sum + getSingleBeastPower(b), 0);
+  const bonds = getBestiaryBondsSummary(beasts, unlockedSpeciesIds);
+  if (bonds.totalBonusCpPct > 0) {
+    return Math.round(raw * (1 + bonds.totalBonusCpPct / 100));
+  }
+  return raw;
 }
 
 /** 七大街機魔王挑戰台（結合題庫階段解鎖 + 卡匣戰力檢定 + 屬性弱點克制） */

@@ -38,9 +38,11 @@ import {
 import {
   BEAST_SPECIES_LIST,
   GENERATION_META,
+  getBestiaryBondsSummary,
   getCurrentUnlockedGeneration,
   getUnlockedSpeciesPool,
-  pickSmartEggSpecies
+  pickSmartEggSpecies,
+  pickUnownedWishEggSpecies
 } from '../../data/beasts';
 import {
   BOSS_LIST,
@@ -230,9 +232,17 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   }, [beasts, profile.battleDeckIds, activeCompanion]);
 
   const maxAura = useMemo(() => getRanchMaxAuraSummary(beasts), [beasts]);
+  const bestiaryBonds = useMemo(
+    () => getBestiaryBondsSummary(beasts, profile.unlockedSpeciesIds),
+    [beasts, profile.unlockedSpeciesIds]
+  );
 
   const isSlimeCrisis = mistakeCount >= 8;
-  const teamCombatPower = calculateTeamCombatPower(beasts, profile.battleDeckIds);
+  const teamCombatPower = calculateTeamCombatPower(
+    beasts,
+    profile.battleDeckIds,
+    profile.unlockedSpeciesIds
+  );
   const defeatedBossCount = (profile.defeatedBossIds || []).length;
   const claimedMilestones = profile.claimedMilestoneIds || [];
 
@@ -518,10 +528,55 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     }
   };
 
-  // 神秘抽蛋屋抽蛋（含智慧防重複權重 & 新世代焦點蛋池）
-  const handleDrawEgg = async (type: 'coin' | 'gem' | 'new_gen_coin') => {
+  // 神秘抽蛋屋抽蛋（含智慧防重複權重、新世代焦點蛋池 & 星魂定向保底許願池）
+  const handleDrawEgg = async (
+    type: 'coin' | 'gem' | 'new_gen_coin' | 'star_wish'
+  ) => {
     if (eggs.length >= 3) {
       showToast('孵蛋巢位已滿（最多 3 顆）！請先答題孵化現有的神秘蛋喔！');
+      return;
+    }
+
+    if (type === 'star_wish') {
+      const currentDust = profile.starDust ?? 0;
+      if (currentDust < 60) {
+        sound.playWrong();
+        showToast(
+          `🌟 奇獸星魂不足 60 點（目前 ${currentDust} 點）！可至「📦 奇獸倉庫」將多餘的重複奇獸化為星魂喔！`
+        );
+        return;
+      }
+      await db.profile.update('default_player', {
+        starDust: currentDust - 60
+      });
+
+      const { species: wishChosen, isGuaranteedNew } = pickUnownedWishEggSpecies({
+        masteredCount,
+        ownedBeasts: beasts,
+        unlockedSpeciesIds: profile.unlockedSpeciesIds
+      });
+
+      const wishEgg: BeastInstance = {
+        instanceId: `beast_wish_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        speciesId: wishChosen.speciesId,
+        nickname: wishChosen.eggName,
+        rarity: wishChosen.rarity,
+        stage: 'egg',
+        eggProgress: 0,
+        eggTarget: wishChosen.eggStepsRequired,
+        currentExp: 0,
+        level: 0,
+        obtainedAt: Date.now()
+      };
+
+      await db.beasts.put(wishEgg);
+      sound.playFanfare();
+      showToast(
+        isGuaranteedNew
+          ? `🌠 星魂許願成真！定向召喚尚未收錄的第 ${wishChosen.generation ?? 1} 世代【${wishChosen.rarity}】${wishChosen.eggName}！`
+          : `🌠 星魂許願成真！已收錄全數解鎖品種，保底召喚高階【${wishChosen.rarity}】${wishChosen.eggName}！`
+      );
+      setShowGachaModal(false);
       return;
     }
 
@@ -1883,18 +1938,23 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                 </button>
               </div>
 
-              <p className="text-sm text-slate-600 mb-2">
-                目前孵蛋巢位：{eggs.length} / 3 顆 ｜ 已解鎖至{' '}
-                <strong className="text-indigo-700">
-                  {GENERATION_META[currentMaxGen]?.title || `第 ${currentMaxGen} 世代`}
-                </strong>
-                （共 {unlockedSpeciesCount} 種奇獸可抽出，智慧防重複系統將優先抽出尚未收錄的新奇獸！）
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <p className="text-xs text-slate-600">
+                  目前孵蛋巢位：{eggs.length} / 3 顆 ｜ 已解鎖至{' '}
+                  <strong className="text-indigo-700">
+                    {GENERATION_META[currentMaxGen]?.title || `第 ${currentMaxGen} 世代`}
+                  </strong>
+                  （共 {unlockedSpeciesCount} 種可抽出）
+                </p>
+                <span className="px-2.5 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-950 font-extrabold text-xs">
+                  🌟 持有星魂：{profile.starDust ?? 0} 點
+                </span>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 flex flex-col justify-between items-center text-center">
                   <div>
-                    <div className="text-4xl my-1.5">🥚</div>
+                    <div className="text-4xl my-1">🥚</div>
                     <h4 className="font-extrabold text-amber-950 text-sm">草原祈願蛋池</h4>
                     <p className="text-xs text-amber-800 mt-1">
                       從已解鎖世代召喚 N / R 級神獸蛋，小機率出現 SR 級（未收錄品種 4.5 倍UP）！
@@ -1915,7 +1975,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                     150題解鎖・新奇獸專池
                   </span>
                   <div>
-                    <div className="text-4xl my-1.5">🌟</div>
+                    <div className="text-4xl my-1">🌟</div>
                     <h4 className="font-extrabold text-sky-950 text-sm">新世代焦點蛋池</h4>
                     <p className="text-xs text-sky-800 mt-1">
                       100% 保證抽出【第 2～{Math.max(2, currentMaxGen)} 世代】全新階段奇獸（保底 R～SSR）！
@@ -1946,7 +2006,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
 
                 <div className="p-4 rounded-2xl bg-purple-50 border-2 border-purple-300 flex flex-col justify-between items-center text-center">
                   <div>
-                    <div className="text-4xl my-1.5">🔮</div>
+                    <div className="text-4xl my-1">🔮</div>
                     <h4 className="font-extrabold text-purple-950 text-sm">星穹聖獸蛋池</h4>
                     <p className="text-xs text-purple-800 mt-1">
                       保底 R 級以上！極高機率召喚已解鎖世代的 SR 與 SSR 傳說聖獸蛋！
@@ -1960,6 +2020,38 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                     <Gem className="w-3.5 h-3.5" />
                     12 寶石召喚
                   </button>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gradient-to-b from-indigo-950 via-purple-950 to-slate-900 text-white border-2 border-amber-400 flex flex-col justify-between items-center text-center relative shadow-md">
+                  <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black shadow">
+                    100% 保底未收錄新品種
+                  </span>
+                  <div>
+                    <div className="text-4xl my-1">🌠</div>
+                    <h4 className="font-extrabold text-amber-300 text-sm">星魂定向許願池</h4>
+                    <p className="text-xs text-indigo-100 mt-1">
+                      消耗重複奇獸化成的星魂，100% 定向召喚已解鎖世代中「尚未擁有過」的奇獸蛋！
+                    </p>
+                  </div>
+                  <div className="w-full flex flex-col gap-1.5 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => handleDrawEgg('star_wish')}
+                      className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-950 font-black text-xs shadow flex items-center justify-center gap-1"
+                    >
+                      🌟 60 星魂保底許願（持有 {profile.starDust ?? 0}）
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowGachaModal(false);
+                        setShowStorageModal(true);
+                      }}
+                      className="w-full py-1 rounded-lg bg-white/10 hover:bg-white/20 text-amber-200 font-bold text-[11px]"
+                    >
+                      前往倉庫將重複奇獸化為星魂 ➔
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2036,7 +2128,53 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                 </button>
               </div>
 
-              <div className="p-5 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-5">
+                {/* 十大世代圖鑑套卡羈絆殿堂 */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950 via-slate-900 to-purple-950 text-white border-2 border-amber-400/70 shadow-md">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div>
+                      <h4 className="font-black text-sm md:text-base text-amber-300 flex items-center gap-1.5">
+                        🔗 十大世代圖鑑套卡羈絆（永久被動加成，放倉庫亦生效！）
+                      </h4>
+                      <p className="text-xs text-indigo-200 mt-0.5">
+                        集滿各世代半數奇獸開啟「初階共鳴（+3%戰力/+2%金幣）」，集滿該世代全數奇獸開啟「完全羈絆（+8%戰力/+6%金幣/+0.2秒思考）」！
+                      </p>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-black text-xs">
+                      已收錄 {bestiaryBonds.totalCollectedSpecies}/{BEAST_SPECIES_LIST.length} 種 ｜ 總加成：⚡戰力 +{bestiaryBonds.totalBonusCpPct}% ・ 🪙金幣 +{bestiaryBonds.totalBonusCoinPct}% ・ ⏱️+{bestiaryBonds.totalBonusSeconds}秒
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {bestiaryBonds.bonds.map((b) => (
+                      <div
+                        key={b.generation}
+                        className={`p-2 rounded-xl border text-xs flex flex-col justify-between ${
+                          b.isCompleted
+                            ? 'bg-amber-400/20 border-amber-400 text-amber-200'
+                            : b.isHalfCompleted
+                            ? 'bg-emerald-500/20 border-emerald-400/70 text-emerald-200'
+                            : 'bg-white/5 border-white/10 text-slate-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-extrabold">
+                          <span>第 {b.generation} 世代</span>
+                          <span>
+                            {b.collectedSpecies}/{b.totalSpecies}
+                          </span>
+                        </div>
+                        <div className="text-[10px] font-bold mt-1">
+                          {b.isCompleted
+                            ? '👑 完全羈絆 (+8%CP/+6%幣)'
+                            : b.isHalfCompleted
+                            ? '✨ 初階共鳴 (+3%CP/+2%幣)'
+                            : `集滿 ${Math.ceil(b.totalSpecies / 2)} 種啟動共鳴`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {BEAST_SPECIES_LIST.map((sp) => {
                   const ownedInstances = beasts.filter(
                     (b) => b.speciesId === sp.speciesId && b.stage !== 'egg'
@@ -2142,6 +2280,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                     </div>
                   );
                 })}
+                </div>
               </div>
             </motion.div>
           </div>

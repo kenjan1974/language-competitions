@@ -1,9 +1,9 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：**Phase 10 & Phase 11 已完成**（重傷休養安全機制、10 大世代 62 種奇獸完整擴充、+12%/世代戰力階梯、12 大階段里程碑覆蓋至 3,457 題），準備執行 **Phase 12（圖鑑套卡羈絆系統與重複卡星魂許願池）**
+- **目前階段**：**Phase 10、Phase 11、Phase 12 已完成**（重傷休養安全機制、10大世代62種奇獸、世代戰力階梯、12階段里程碑、十大世代圖鑑羈絆加成、重複卡星魂轉化與100%未收錄保底許願池），準備執行 **Phase 13（街機魔王戰 2.0：12 大主題魔王 ＋ 越級挑戰護盾壓制 ＋ 玩家隊伍 HP 與主題題庫）**
 - **最後更新時間**：2026-11-23
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 12` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 13` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
 
 ---
 
@@ -40,12 +40,12 @@
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 12: 圖鑑套卡羈絆系統（Collection Sets）與重複卡「星魂許願池（保底機制）」
-- [ ] **Task 12.1: 實作 10 大世代「圖鑑羈絆套卡加成 (`Bestiary Bonds`)」**
+- [x] **Task 12.1: 實作 10 大世代「圖鑑羈絆套卡加成 (`Bestiary Bonds`)」**
   - 在 `src/data/beasts.ts` & `src/utils/beastPerks.ts` 新增世代圖鑑羈絆計算：每集齊一個世代的奇獸（含倉庫與曾解鎖圖鑑），永久獲得全隊戰力 `%`、金幣 `%` 或字音秒數加成，並在圖鑑 Modal 與牧場顯示羈絆啟動狀態。
-- [ ] **Task 12.2: 實作重複卡轉化「🌟 奇獸星魂 (`starDust`)」與「🌠 星魂定向許願池」**
-  - 在 `src/components/ranch/BeastStorageModal.tsx` 新增「✨ 一鍵將多餘重複奇獸轉化為星魂」按鈕（自動保留每品種最強的 1 隻與出戰卡組，其餘重複卡依 N=5 / R=15 / SR=40 / SSR=100 轉為星魂）。
+- [x] **Task 12.2: 實作重複卡轉化「🌟 奇獸星魂 (`starDust`)」與「🌠 星魂定向許願池」**
+  - 在 `src/components/ranch/BeastStorageModal.tsx` 新增「✨ 一鍵將多餘重複奇獸轉化為星魂」按鈕（自動保留每品種最強的 1 隻與出戰卡組，其餘重複卡依 N/R/SR/SSR 與等級加權轉為星魂）。
   - 在 `src/components/ranch/RanchDashboard.tsx` 神秘抽蛋屋新增第 4 池「🌠 星魂許願池（消耗 60 星魂）」：100% 保證抽出目前已解鎖世代中**尚未收錄過的新品種奇獸蛋**！
-- [ ] **Task 12.3: 驗證與 Git Commit**
+- [x] **Task 12.3: 驗證與 Git Commit**
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 13: 街機魔王戰 2.0（12 大主題魔王 ＋ 越級挑戰護盾壓制 ＋ 玩家隊伍 HP 與主題題庫）

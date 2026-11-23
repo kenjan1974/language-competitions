@@ -18,7 +18,10 @@ import {
   PlayerProfile,
   Rarity
 } from '../../types/game';
-import { BEAST_SPECIES_LIST, GENERATION_META } from '../../data/beasts';
+import {
+  BEAST_SPECIES_LIST,
+  getBeastStarDustValue
+} from '../../data/beasts';
 import { getBeastCardStars, getResolvedBattleDeck, getSingleBeastPower } from '../../data/bosses';
 import {
   ELEMENT_META,
@@ -105,6 +108,122 @@ export const BeastStorageModal: React.FC<BeastStorageModalProps> = ({
     () => sortBeastList(activeRanchBeasts),
     [activeRanchBeasts, sortBy]
   );
+
+  // 統計每種品種目前已孵化的總隻數（用於判斷是否為可安全轉化為星魂的重複奇獸，每種至少保留 1 隻本尊）
+  const speciesTotalCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of hatchedBeasts) {
+      map.set(b.speciesId, (map.get(b.speciesId) ?? 0) + 1);
+    }
+    return map;
+  }, [hatchedBeasts]);
+
+  // 計算所有（牧場＋倉庫）可一鍵轉化為「🌟 奇獸星魂」的多餘重複奇獸（每品種自動保留最強的 1 隻本尊及出戰中奇獸）
+  const convertibleDuplicates = useMemo(() => {
+    const bySpecies = new Map<string, BeastInstance[]>();
+    for (const b of hatchedBeasts) {
+      const arr = bySpecies.get(b.speciesId) ?? [];
+      arr.push(b);
+      bySpecies.set(b.speciesId, arr);
+    }
+
+    const toConvert: BeastInstance[] = [];
+    for (const group of bySpecies.values()) {
+      if (group.length <= 1) continue;
+      const sorted = [...group].sort((a, b) => {
+        const lvDiff = getBeastLevel(b) - getBeastLevel(a);
+        if (lvDiff !== 0) return lvDiff;
+        const expDiff = b.currentExp - a.currentExp;
+        if (expDiff !== 0) return expDiff;
+        return a.obtainedAt - b.obtainedAt;
+      });
+
+      const keeperId = sorted[0].instanceId;
+      for (const item of sorted) {
+        if (item.instanceId === keeperId) continue;
+        if (item.instanceId === profile.activeBeastId) continue;
+        if (battleDeckIds.has(item.instanceId)) continue;
+        toConvert.push(item);
+      }
+    }
+    return toConvert;
+  }, [hatchedBeasts, profile.activeBeastId, battleDeckIds]);
+
+  const totalConvertibleStarDust = useMemo(
+    () =>
+      convertibleDuplicates.reduce(
+        (sum, b) => sum + getBeastStarDustValue(b, getBeastLevel(b)),
+        0
+      ),
+    [convertibleDuplicates]
+  );
+
+  // 將單隻重複奇獸轉化為星魂（保底許願碎片）
+  const handleConvertSingleToStarDust = async (beast: BeastInstance) => {
+    const count = speciesTotalCounts.get(beast.speciesId) ?? 0;
+    if (count <= 1) {
+      sound.playWrong();
+      setNotice('⚠️ 這是你唯一的一隻該品種奇獸！系統已保護本尊，僅有多餘的重複奇獸可轉化為星魂喔！');
+      return;
+    }
+    if (
+      beast.instanceId === profile.activeBeastId ||
+      battleDeckIds.has(beast.instanceId)
+    ) {
+      sound.playWrong();
+      setNotice('⚠️ 此奇獸目前正在出戰陣容中，請先卸下再轉化為星魂！');
+      return;
+    }
+
+    const lv = getBeastLevel(beast);
+    const dustGain = getBeastStarDustValue(beast, lv);
+    const prevUnlocked = profile.unlockedSpeciesIds || [];
+    const nextUnlocked = prevUnlocked.includes(beast.speciesId)
+      ? prevUnlocked
+      : [...prevUnlocked, beast.speciesId];
+
+    sound.playCorrect(3);
+    await db.beasts.delete(beast.instanceId);
+    await db.profile.update('default_player', {
+      starDust: (profile.starDust ?? 0) + dustGain,
+      unlockedSpeciesIds: nextUnlocked
+    });
+    setNotice(
+      `🌟 已將重複的「${beast.nickname}」化為 +${dustGain} 奇獸星魂！（集滿 60 星魂可至抽蛋屋定向召喚未收錄奇獸！）`
+    );
+  };
+
+  // 一鍵將所有多餘重複奇獸轉化為星魂（每品種保留最強 1 隻本尊）
+  const handleConvertAllDuplicatesToStarDust = async () => {
+    if (convertibleDuplicates.length === 0) {
+      sound.playClick();
+      setNotice('✨ 目前沒有多餘的閒置重複奇獸可轉化（每種奇獸皆已為你保留最強的 1 隻本尊）！');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `🌟 確定要將 ${convertibleDuplicates.length} 隻多餘的重複奇獸化為【+${totalConvertibleStarDust} 奇獸星魂】嗎？\n（系統會自動為每個品種保留等級最高的 1 隻本尊與所有出戰中奇獸，且圖鑑羈絆永久保留！集滿 60 星魂即可在抽蛋屋 100% 定向召喚未收錄的新奇獸！）`
+    );
+    if (!confirmed) return;
+
+    const allHatchedSpeciesIds = Array.from(
+      new Set([
+        ...(profile.unlockedSpeciesIds || []),
+        ...hatchedBeasts.map((b) => b.speciesId)
+      ])
+    );
+
+    sound.playFanfare();
+    await db.beasts.bulkDelete(convertibleDuplicates.map((b) => b.instanceId));
+    await db.profile.update('default_player', {
+      starDust: (profile.starDust ?? 0) + totalConvertibleStarDust,
+      unlockedSpeciesIds: allHatchedSpeciesIds
+    });
+
+    setNotice(
+      `🌠 轉化成功！已將 ${convertibleDuplicates.length} 隻重複奇獸化為 +${totalConvertibleStarDust} 奇獸星魂（目前共 ${(profile.starDust ?? 0) + totalConvertibleStarDust} 星魂）！快去「神秘抽蛋屋」定向許願未收錄的新奇獸吧！`
+    );
+  };
 
   // 計算牧場上有多少隻可一鍵收納的重複奇獸
   const duplicateCandidatesOnRanch = useMemo(() => {
@@ -212,6 +331,9 @@ export const BeastStorageModal: React.FC<BeastStorageModalProps> = ({
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-extrabold">
                   倉庫保管 {storedBeasts.length} 隻 ｜ 牧場上場 {activeRanchBeasts.length} 隻
                 </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-extrabold">
+                  🌟 奇獸星魂：{profile.starDust ?? 0}（60星魂可許願未收錄奇獸）
+                </span>
               </h3>
               <p className="text-xs text-slate-600 font-semibold mt-0.5">
                 把暫不升級或重複的奇獸放進倉庫，不僅牧場更清爽，且在倉庫中免受戰敗降級或消滅風險！
@@ -240,14 +362,24 @@ export const BeastStorageModal: React.FC<BeastStorageModalProps> = ({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleAutoStoreDuplicates}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow flex items-center gap-1.5 shrink-0 active:scale-95 transition"
-          >
-            <Sparkles className="w-4 h-4" />
-            🧹 一鍵收納牧場重複奇獸 ({duplicateCandidatesOnRanch.length} 隻)
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAutoStoreDuplicates}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow flex items-center gap-1.5 shrink-0 active:scale-95 transition"
+            >
+              <Sparkles className="w-4 h-4" />
+              🧹 一鍵收納重複 ({duplicateCandidatesOnRanch.length} 隻)
+            </button>
+
+            <button
+              type="button"
+              onClick={handleConvertAllDuplicatesToStarDust}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow flex items-center gap-1.5 shrink-0 active:scale-95 transition"
+            >
+              <span>🌟 重複化為星魂 ({convertibleDuplicates.length}隻 ➔ +{totalConvertibleStarDust}星魂)</span>
+            </button>
+          </div>
         </div>
 
         {/* 提示訊息 */}
@@ -422,7 +554,7 @@ export const BeastStorageModal: React.FC<BeastStorageModalProps> = ({
                       )}
                     </div>
 
-                    <div className="w-full mt-3">
+                    <div className="w-full mt-3 flex flex-col gap-1.5">
                       {beast.inStorage ? (
                         <button
                           type="button"
@@ -442,6 +574,17 @@ export const BeastStorageModal: React.FC<BeastStorageModalProps> = ({
                           移入倉庫
                         </button>
                       )}
+                      {(speciesTotalCounts.get(beast.speciesId) ?? 0) > 1 &&
+                        !isPartner &&
+                        !isInDeck && (
+                          <button
+                            type="button"
+                            onClick={() => handleConvertSingleToStarDust(beast)}
+                            className="w-full py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-extrabold text-[11px] flex items-center justify-center gap-1 active:scale-95 transition"
+                          >
+                            🌟 化為星魂 (+{getBeastStarDustValue(beast, level)})
+                          </button>
+                        )}
                     </div>
                   </div>
                 );

@@ -152,7 +152,8 @@
 - **新增/修改檔案**：
   - 新增 `src/utils/wordKnowledge.ts`, `scripts/enrich-questions.mjs`
   - 修改 `SPEC.md`, `PROGRESS.md`, `package.json`, `src/types/game.ts`, `src/db/database.ts`, `src/data/beasts.ts`, `src/data/bosses.ts`, `src/data/questions.json`, `src/utils/beastPerks.ts`, `src/services/quizEngine.ts`, `src/App.tsx`, `src/components/quiz/BossBattleBanner.tsx`, `src/components/quiz/PronunciationStage.tsx`, `src/components/quiz/CharacterWritingStage.tsx`, `src/components/quiz/ChallengeResultModal.tsx`, `src/components/ranch/RanchDashboard.tsx`, `src/components/ranch/BossArenaModal.tsx`, `src/components/ranch/BeastStorageModal.tsx`, `src/components/ranch/MistakeNotebookModal.tsx`
-- **目前系統狀態**：`./node_modules/.bin/tsc --noEmit` 零錯誤通過，所有既有存檔 100% 向下相容。
+- **目前系統狀態**：`npm test`（13 項 V2 自動化測試）100% 通過、`tsc --noEmit` 零錯誤、`vite build`（含 PWA Service Worker 離線快取打包與 `questions-data` 獨立拆包）完整編譯通過，所有既有存檔 100% 向下相容。
+  - 補充修復：`vite.config.ts` 新增 `manualChunks`（將 3,457 題擴充題庫拆分為獨立 `questions-data` chunk，主程式縮減至 290 kB）並提高 `workbox.maximumFileSizeToCacheInBytes` 至 6 MB，徹底解決題庫超過 Workbox 預設 2 MiB 上限導致 `vite build` 失敗的問題；新增 `scripts/verify-v2.mjs`（綁定 `npm test`）作為後續每次交接與 Commit 前的標準自動化測試。
 
 ### 2026-11-20 - Hatched Beasts Sorting Toolbar Upgrade
 - **完成任務**：

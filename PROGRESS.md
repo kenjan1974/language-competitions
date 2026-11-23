@@ -1,9 +1,9 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：V2 全方位升級規劃書已完成（Phase 10 ～ Phase 15 路線圖已建置），準備開始執行 **Phase 10（戰損安全保護機制、永久圖鑑點亮與小隊協同重構）**
+- **目前階段**：**Phase 10 已完成**（重傷休養取代永久刪除、中途安全撤退、永久圖鑑點亮、3卡槽副將協同加成、錯題本連對次數統一），準備執行 **Phase 11（10 大世代 62 種奇獸擴充、世代戰力階梯與 3,457 題完整里程碑）**
 - **最後更新時間**：2026-11-23
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 10` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 11` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
 
 ---
 
@@ -11,7 +11,7 @@
 > **交接鐵則**：每完成一個 Phase，請立即勾選 `[x]`、在下方 Handoff Log 留下記錄，並執行 `git add -A && git commit -m "..."`，讓任何接手的 Agent 都能無縫接力！
 
 ### Phase 10: 戰損安全保護機制、永久圖鑑點亮與 3 卡槽小隊協同重構
-- [ ] **Task 10.1: 廢除「<20% 永久刪除奇獸」，改為「🩹 重傷休養 (`isInjured`) 與雙軌療傷機制」**
+- [x] **Task 10.1: 廢除「<20% 永久刪除奇獸」，改為「🩹 重傷休養 (`isInjured`) 與雙軌療傷機制」**
   - 修改 `src/types/game.ts`：`BeastInstance` 新增 `isInjured?: boolean`、`injuryRecoveryProgress?: number`、`injuryRecoveryTarget?: number`；`PlayerProfile` 新增 `unlockedSpeciesIds?: string[]`、`starDust?: number`；`BattlePenaltySummary.type` 支援 `'level_down' | 'injured'`。
   - 修改 `src/services/quizEngine.ts`：
     - 答對率 `< 20%` 時不再 `db.beasts.delete()`，改為將該參戰奇獸設為 `isInjured: true`、`injuryRecoveryProgress: 0`、`injuryRecoveryTarget: 12` 並降 1 級（最低 Lv.1）。
@@ -19,13 +19,13 @@
   - 修改 `src/components/ranch/RanchDashboard.tsx` & `src/components/quiz/ChallengeResultModal.tsx`：
     - 顯示「🩹 重傷休養中（答對 X/12 題康復）」徽章，並提供「🌿 餵食 2 株靈氣牧草立即治癒」按鈕。
     - 重傷奇獸暫不計入出戰卡組與 Lv.6 滿級光環。
-- [ ] **Task 10.2: 中途安全撤退機制與永久圖鑑點亮紀錄**
-  - 修改 `src/App.tsx`：測驗中途點擊「返回奇幻牧場」時，若尚未作答任何題目直接安全返回；若已作答則提供「🏳️ 戰術安全撤退（放棄本局獎勵，奇獸零戰損返回牧場）」確認，徹底杜絕中途退出誤觸 `<20%` 懲罰的 Bug。
+- [x] **Task 10.2: 中途安全撤退機制與永久圖鑑點亮紀錄**
+  - 修改 `src/App.tsx`：測驗中途點擊「返回奇幻牧場」時，提供「🏳️ 戰術安全撤退（放棄本局獎勵，奇獸零戰損返回牧場）」確認，徹底杜絕中途退出誤觸 `<20%` 懲罰的 Bug。
   - 修改 `src/components/ranch/RanchDashboard.tsx`：孵化奇獸時同步寫入 `profile.unlockedSpeciesIds`，全圖鑑改以 `unlockedSpeciesIds ∪ 目前已孵化奇獸` 判定點亮狀態，確保圖鑑永不熄滅。
-- [ ] **Task 10.3: 3 卡槽「主將＋副將」協同加成與錯題本連對顯示統一**
+- [x] **Task 10.3: 3 卡槽「主將＋副將」協同加成與錯題本連對顯示統一**
   - 修改 `src/utils/beastPerks.ts` & `src/App.tsx`：將機台 3 張出戰卡槽的第 2、3 張副將納入日常與魔王戰協同加成（副將依等級提供額外金幣加成與字音思考秒數）。
   - 修改 `src/components/ranch/MistakeNotebookModal.tsx`：將常錯題解除進度文字統一為「連續答對 2 次解除（`prog.consecutiveCorrect / 2`）」，與 `quizEngine.ts` 邏輯完全一致。
-- [ ] **Task 10.4: 驗證與 Git Commit**
+- [x] **Task 10.4: 驗證與 Git Commit**
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 11: 10 大世代 62 種奇獸擴充、世代戰力階梯與 3,457 題完整里程碑

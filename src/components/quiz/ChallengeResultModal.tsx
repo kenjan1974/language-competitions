@@ -60,7 +60,8 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
   const isBoss = mode === 'slime_boss' || mode === 'boss_battle';
   const bossEmoji = mode === 'boss_battle' && boss ? boss.emoji : '👾';
   const bossName = mode === 'boss_battle' && boss ? boss.name : '食字史萊姆';
-  const isDestroyed = battlePenalty?.type === 'destroyed';
+  const isDestroyed =
+    battlePenalty?.type === 'injured' || battlePenalty?.type === 'destroyed';
   const isLevelDown = battlePenalty?.type === 'level_down';
 
   useEffect(() => {
@@ -172,7 +173,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                 ? '⚔️ 除魔魔王戰・通關成功'
                 : '🏆 語文競賽挑戰・通關成功'
               : isDestroyed
-              ? '💀 慘敗警報・答對率低於 20% 參戰奇獸消滅！'
+              ? '🩹 重傷警報・答對率低於 20% 參戰奇獸重傷休養！'
               : isLevelDown
               ? '💔 戰損警報・答對率未達 50% 參戰奇獸降級！'
               : isBoss
@@ -316,7 +317,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                   </motion.div>
                 </motion.div>
 
-                {/* 浮動消滅標籤 */}
+                {/* 浮動重傷休養標籤 */}
                 <motion.div
                   initial={{ x: 16, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
@@ -327,10 +328,10 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                     【{battlePenalty.rarity}】{battlePenalty.beastName}
                   </span>
                   <span className="text-base font-black text-white flex items-center gap-1 mt-0.5">
-                    💀 力竭消滅！
+                    🩹 重傷休養中！
                   </span>
                   <span className="text-[10px] font-bold text-rose-200 mt-0.5">
-                    已從牧場與出戰卡槽移除
+                    降至 Lv.{battlePenalty.newLevel}・答對 12 題或餵 2 株牧草可治癒
                   </span>
                 </motion.div>
               </div>
@@ -433,7 +434,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                 ? `🎉 成功擊退${bossName}！`
                 : '🎊 挑戰通關成功！'
               : isDestroyed
-              ? `💀 慘敗！${battlePenalty?.beastName}被消滅了`
+              ? `🩹 重傷！${battlePenalty?.beastName}進入休養狀態`
               : isLevelDown
               ? `💔 戰損！${battlePenalty?.beastName}降為 Lv.${battlePenalty?.newLevel}`
               : isBoss
@@ -501,7 +502,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                 {passed
                   ? `最高 ${maxCombo} Combo・達標過關`
                   : accuracy < 20
-                  ? '低於 20%・觸發奇獸消滅'
+                  ? '低於 20%・觸發重傷休養'
                   : accuracy < 50
                   ? '低於 50%・觸發戰損降級'
                   : '達 50% 以上・奇獸免受戰損'}
@@ -584,7 +585,7 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                   <div className="text-sm font-black text-white flex items-center justify-between flex-wrap gap-1">
                     <span>
                       {isDestroyed
-                        ? `【${battlePenalty.rarity}】${battlePenalty.beastName} 陣亡消滅`
+                        ? `【${battlePenalty.rarity}】${battlePenalty.beastName} 重傷休養`
                         : `【${battlePenalty.rarity}】${battlePenalty.beastName} 戰損降級`}
                     </span>
                     <span
@@ -595,13 +596,13 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
                       }`}
                     >
                       {isDestroyed
-                        ? `Lv.${battlePenalty.previousLevel} ➔ 永久消滅`
+                        ? `Lv.${battlePenalty.previousLevel} ➔ Lv.${battlePenalty.newLevel} (重傷休養)`
                         : `Lv.${battlePenalty.previousLevel} ➔ Lv.${battlePenalty.newLevel}`}
                     </span>
                   </div>
                   <p className="mt-1 opacity-95 leading-relaxed">
                     {isDestroyed
-                      ? `本局答對率僅 ${accuracy}%（低於 20% 底線），參戰奇獸因重傷力竭已永久消滅！下次對題目沒把握時，建議先在主畫面切換「🛡️ 派小兵探路」，並可從「📦 奇獸倉庫」調派備用奇獸替補！`
+                      ? `本局答對率僅 ${accuracy}%（低於 20% 底線），參戰奇獸已受重傷並退回牧場休養（不會消失，圖鑑永久保留）！只要在後續測驗中累計答對 ${battlePenalty.recoveryTarget ?? 12} 題，或在牧場餵食 2 株靈氣牧草，即可完全康復重新出戰！`
                       : `本局答對率為 ${accuracy}%（未達 50% 防線），參戰奇獸遭受重創損耗 1 級且經驗值歸零！若題目還不熟，建議先切換「🛡️ 派小兵探路」保護主力大將喔！`}
                   </p>
                 </div>

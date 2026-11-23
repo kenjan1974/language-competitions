@@ -33,13 +33,14 @@ export interface QuizSessionData {
 }
 
 export interface BattlePenaltySummary {
-  type: 'level_down' | 'destroyed';
+  type: 'level_down' | 'injured' | 'destroyed';
   beastInstanceId: string;
   beastName: string;
   beastEmoji: string;
   rarity: Rarity;
   previousLevel: number;
   newLevel: number;
+  recoveryTarget?: number;
 }
 
 export interface QuizRewardSummary {
@@ -430,19 +431,36 @@ export async function recordQuestionAttempt(
 
   await db.progress.put(updated);
 
-  // 每答對一題，即時推進牧場孵蛋巢位（最多前 3 顆蛋同步孵化）
+  // 每答對一題，即時推進牧場孵蛋巢位（最多前 3 顆蛋同步孵化）以及重傷休養中奇獸的療傷進度
   if (effectiveCorrect) {
     const stepBonus = questionObj?.type === 'character' ? 2 : 1;
-    const eggs = await db.beasts
-      .where('stage')
-      .equals('egg')
-      .sortBy('obtainedAt');
+    const allBeasts = await db.beasts.toArray();
+    const eggs = allBeasts
+      .filter((b) => b.stage === 'egg')
+      .sort((a, b) => a.obtainedAt - b.obtainedAt);
 
     const activeNestEggs = eggs.slice(0, 3);
     for (const egg of activeNestEggs) {
       if (egg.eggProgress < egg.eggTarget) {
         await db.beasts.update(egg.instanceId, {
           eggProgress: Math.min(egg.eggTarget, egg.eggProgress + stepBonus)
+        });
+      }
+    }
+
+    // 同步推進重傷休養奇獸的答題療傷進度（達標自動康復！）
+    const injuredBeasts = allBeasts.filter((b) => b.stage !== 'egg' && b.isInjured);
+    for (const injured of injuredBeasts) {
+      const target = injured.injuryRecoveryTarget ?? 12;
+      const nextProg = (injured.injuryRecoveryProgress ?? 0) + stepBonus;
+      if (nextProg >= target) {
+        await db.beasts.update(injured.instanceId, {
+          isInjured: false,
+          injuryRecoveryProgress: 0
+        });
+      } else {
+        await db.beasts.update(injured.instanceId, {
+          injuryRecoveryProgress: nextProg
         });
       }
     }
@@ -732,14 +750,32 @@ export async function settleQuizRewards(params: {
 
     if (candidates.length > 0) {
       if (accuracy < 20) {
-        // 低於 2 成：隨機一隻參戰奇獸被消滅！
+        // 低於 2 成：參戰奇獸之一遭受重創進入「🩹 重傷休養」狀態並降 1 級（取代永久刪除，保護玩家全圖鑑蒐集心血！）
         const victim = candidates[Math.floor(Math.random() * candidates.length)];
         const sp = speciesMap.get(victim.speciesId);
         const prevLv = getBeastLevel(victim);
         const prevStage = getStageForLevel(prevLv);
         const stageInfo = sp ? getStageDisplayInfo(prevStage, sp) : null;
+        const recoveryTarget = 12;
 
-        await db.beasts.delete(victim.instanceId);
+        let newLv = Math.max(1, prevLv - 1);
+        if (sp) {
+          const { updatedBeast, newLevel } = computeBeastDemotion(victim, sp);
+          newLv = newLevel;
+          await db.beasts.put({
+            ...updatedBeast,
+            isInjured: true,
+            injuryRecoveryProgress: 0,
+            injuryRecoveryTarget: recoveryTarget
+          });
+        } else {
+          await db.beasts.update(victim.instanceId, {
+            isInjured: true,
+            injuryRecoveryProgress: 0,
+            injuryRecoveryTarget: recoveryTarget
+          });
+        }
+
         if (nextActiveBeastId === victim.instanceId) {
           nextActiveBeastId = null;
         }
@@ -750,13 +786,14 @@ export async function settleQuizRewards(params: {
         }
 
         battlePenalty = {
-          type: 'destroyed',
+          type: 'injured',
           beastInstanceId: victim.instanceId,
           beastName: stageInfo?.name || victim.nickname,
           beastEmoji: stageInfo?.emoji || '🦊',
           rarity: victim.rarity,
           previousLevel: prevLv,
-          newLevel: 0
+          newLevel: newLv,
+          recoveryTarget
         };
       } else {
         // 20% ~ 49%：參戰奇獸之一損耗 1 個等級（優先挑選 Lv.2 以上或有經驗值的參戰奇獸）

@@ -10,6 +10,12 @@ export interface QuestionItem {
   displayPrompt: string;   // 題目顯示字串，字音題如 "針「灸」"，字形題如 "風聲「ㄏㄜˋ」唳"
   options?: string[];      // [僅字音題] 4 個注音選項（含 1 正解 + 3 誘答，執行期洗牌）
   strokeHint?: string;     // [僅字形題] 易錯筆畫提醒或字義簡述
+  meaning?: string;        // 詞語白話解釋（教育部辭典釋義）
+  charMeaning?: string;    // 目標字在該詞中的具體字義
+  etymologyHint?: string;  // 字首字根／形聲結構拆解（形符表義＋聲符表音）
+  confusableNote?: string; // 易混淆形近字／一字多音語境對照
+  classicSource?: string;  // 經典典故出處（如《論語》、《史記》）
+  exampleSentence?: string;// 語境造句例句
   sources: string[];       // 出處列表，如 ["109全國", "110全國"]
   frequency: number;       // 歷屆出現總次數 (sources.length)
 }
@@ -56,6 +62,9 @@ export interface BeastInstance {
   currentExp: number;          // 餵食牧草累積的經驗值
   level?: number;              // 奇獸等級 (Lv.1 ~ Lv.6；舊存檔未設定時依 stage 自動推算)
   inStorage?: boolean;         // 是否已收納至「奇獸倉庫」（倉庫中的奇獸不佔牧場空間、亦不會上場戰損）
+  isInjured?: boolean;         // 是否處於「重傷休養」狀態（取代永久刪除；重傷時暫停出戰與光環，可透過答題或餵草康復）
+  injuryRecoveryProgress?: number; // 目前答題療傷進度
+  injuryRecoveryTarget?: number;   // 療傷目標答對題數（預設 12 題）
   obtainedAt: number;
 }
 
@@ -111,4 +120,6 @@ export interface PlayerProfile {
   claimedMilestoneIds?: string[];  // 已領取獎勵的題庫階段目標 ID 列表
   battleDeckIds?: string[];        // 玩家編成的 3 張出戰神獸卡匣 instanceId
   shopPurchaseCounts?: Record<string, number>; // 各商品累計購買次數（用於循序漸進提升答題門檻）
+  unlockedSpeciesIds?: string[];   // 歷史曾孵化解鎖過的奇獸品種 ID 列表（確保圖鑑一旦點亮永不熄滅）
+  starDust?: number;               // 奇獸星魂（轉化重複奇獸獲得，用於星魂許願池保底召喚未收錄奇獸）
 }

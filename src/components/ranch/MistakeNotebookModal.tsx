@@ -83,7 +83,7 @@ export const MistakeNotebookModal: React.FC<MistakeNotebookModalProps> = ({
                 個人錯題本與歷屆必考題庫
               </h3>
               <p className="text-xs text-slate-500 font-medium">
-                連續答對 3 次即可解除「常錯題」標籤！點擊任一題可直接進入米字格練習手寫
+                連續答對 2 次即可解除「常錯題」標籤！點擊任一題可直接進入米字格練習手寫
               </p>
             </div>
           </div>
@@ -244,7 +244,7 @@ export const MistakeNotebookModal: React.FC<MistakeNotebookModalProps> = ({
                         <span>出處：{q.sources.join('、')}</span>
                         {prof === 1 && prog && (
                           <span className="text-rose-600 font-bold">
-                            ・解除進度：{prog.consecutiveCorrect}/3 連對
+                            ・解除進度：{prog.consecutiveCorrect}/2 連對
                           </span>
                         )}
                         {prof >= 2 && (

@@ -48,6 +48,7 @@ import {
   MILESTONE_GOALS,
   calculateTeamCombatPower,
   getBeastCardStars,
+  getResolvedBattleDeck,
   getSingleBeastPower
 } from '../../data/bosses';
 import { QuizSubMode } from '../../services/quizEngine';
@@ -68,6 +69,7 @@ import {
   getStageDisplayInfo,
   getStageForLevel,
   getStageTitle,
+  getSubDeckSynergySummary,
   resolveActiveCompanion
 } from '../../utils/beastPerks';
 import { BeastLevelUpModal } from './BeastLevelUpModal';
@@ -222,6 +224,11 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     [profile, beasts, speciesMap]
   );
 
+  const subDeckSynergy = useMemo(() => {
+    const deck = getResolvedBattleDeck(beasts, profile.battleDeckIds);
+    return getSubDeckSynergySummary(deck, activeCompanion?.beast.instanceId);
+  }, [beasts, profile.battleDeckIds, activeCompanion]);
+
   const maxAura = useMemo(() => getRanchMaxAuraSummary(beasts), [beasts]);
 
   const isSlimeCrisis = mistakeCount >= 8;
@@ -271,6 +278,11 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   const handleSetActiveCompanion = async (instanceId: string) => {
     sound.playClick();
     const chosen = hatchedBeasts.find((b) => b.instanceId === instanceId);
+    if (chosen?.isInjured) {
+      sound.playWrong();
+      showToast('🩹 此奇獸目前處於「重傷休養」狀態，請先答題或餵食 2 株靈氣牧草治癒牠喔！');
+      return;
+    }
     const chosenLv = chosen ? getBeastLevel(chosen) : 1;
     const nextStance = chosenLv <= 2 ? 'scout' : 'general';
     await db.profile.update('default_player', {
@@ -284,6 +296,25 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
           : `⚔️ 已指派大將「${chosen.nickname} (Lv.${chosenLv})」親自出馬，通關享 +25% 統帥獎勵加碼！`
       );
     }
+  };
+
+  // 使用 2 株靈氣牧草立即治癒重傷休養中的奇獸
+  const handleHealInjuredBeast = async (beast: BeastInstance) => {
+    if (!beast.isInjured) return;
+    if (profile.forageCount < 2) {
+      sound.playWrong();
+      showToast('🌿 靈氣牧草不足 2 株！可先透過闖關答對題目自然療傷，或前往金幣補給站採購牧草喔！');
+      return;
+    }
+    sound.playFanfare();
+    await db.profile.update('default_player', {
+      forageCount: profile.forageCount - 2
+    });
+    await db.beasts.update(beast.instanceId, {
+      isInjured: false,
+      injuryRecoveryProgress: 0
+    });
+    showToast(`💚 治癒成功！「${beast.nickname}」已完全康復，可以重新出戰囉！`);
   };
 
   // 一鍵切換「🛡️ 斥候小兵探路陣」與「⚔️ 主力大將決戰陣」
@@ -372,11 +403,14 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     };
 
     await db.beasts.put(updatedBeast);
-    if (!profile.activeBeastId) {
-      await db.profile.update('default_player', {
-        activeBeastId: updatedBeast.instanceId
-      });
-    }
+    const prevUnlocked = profile.unlockedSpeciesIds || [];
+    const nextUnlocked = prevUnlocked.includes(egg.speciesId)
+      ? prevUnlocked
+      : [...prevUnlocked, egg.speciesId];
+    await db.profile.update('default_player', {
+      unlockedSpeciesIds: nextUnlocked,
+      ...(!profile.activeBeastId ? { activeBeastId: updatedBeast.instanceId } : {})
+    });
     setSelectedBeastId(updatedBeast.instanceId);
     setNewlyHatchedModal({ beast: updatedBeast, species });
   };
@@ -1297,13 +1331,17 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                           : 'bg-white/80 hover:bg-white border-emerald-100'
                       }`}
                     >
-                      {/* 出戰中徽章 */}
-                      {isActivePartner && (
+                      {/* 出戰中 / 重傷休養徽章 */}
+                      {beast.isInjured ? (
+                        <span className="absolute -top-2 left-2 text-[10px] bg-rose-600 text-white px-2 py-0.5 rounded-full font-extrabold shadow-sm flex items-center gap-0.5">
+                          🩹 重傷休養 ({beast.injuryRecoveryProgress ?? 0}/{beast.injuryRecoveryTarget ?? 12})
+                        </span>
+                      ) : isActivePartner ? (
                         <span className="absolute -top-2 left-2 text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-extrabold shadow-sm flex items-center gap-0.5">
                           <Swords className="w-2.5 h-2.5" />
                           出戰中
                         </span>
-                      )}
+                      ) : null}
 
                       {/* 頂部左：稀有度 + 屬性小標 ｜ 頂部右：等級徽章 */}
                       <div className="w-full flex items-center justify-between gap-1 mt-1">
@@ -1640,9 +1678,18 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                         </div>
                       </div>
 
-                      {/* 設為出戰夥伴 & 移入倉庫按鈕 */}
+                      {/* 設為出戰夥伴 & 重傷急救 & 移入倉庫按鈕 */}
                       <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
-                        {isActivePartner ? (
+                        {selectedBeast.isInjured ? (
+                          <button
+                            type="button"
+                            onClick={() => handleHealInjuredBeast(selectedBeast)}
+                            className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition"
+                          >
+                            <Sprout className="w-4 h-4" />
+                            🩹 靈草急救（2株牧草立即康復｜或答對 {(selectedBeast.injuryRecoveryTarget ?? 12) - (selectedBeast.injuryRecoveryProgress ?? 0)} 題）
+                          </button>
+                        ) : isActivePartner ? (
                           <span className="px-3.5 py-2 rounded-xl bg-indigo-100 border border-indigo-300 text-indigo-800 font-extrabold text-xs flex items-center gap-1.5 shrink-0">
                             <Star className="w-4 h-4 fill-indigo-500 text-indigo-600" />
                             目前出戰夥伴
@@ -1710,6 +1757,11 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                           <Coins className="w-3.5 h-3.5 text-amber-600" />
                           金幣牧草 +{perks.rewardBonusPct}%
                         </span>
+                        {subDeckSynergy.subBeasts.length > 0 && (
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 flex items-center gap-1">
+                            🎴 副將協同 ({subDeckSynergy.subBeasts.length}名)：額外 +{subDeckSynergy.bonusSeconds}秒 / +{subDeckSynergy.bonusCoinsPct}%金幣
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] font-bold text-slate-600 flex items-start gap-1.5">
                         <span
@@ -1989,7 +2041,9 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                   const ownedInstances = beasts.filter(
                     (b) => b.speciesId === sp.speciesId && b.stage !== 'egg'
                   );
-                  const isUnlocked = ownedInstances.length > 0;
+                  const isUnlocked =
+                    ownedInstances.length > 0 ||
+                    (profile.unlockedSpeciesIds || []).includes(sp.speciesId);
                   const reqMastered = sp.unlockMasteredCount ?? 0;
                   const isPoolUnlocked = masteredCount >= reqMastered;
                   const gen = sp.generation ?? 1;

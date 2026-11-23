@@ -78,12 +78,14 @@ export function getSingleBeastPower(beast: BeastInstance): number {
   return row[stage] ?? 100;
 }
 
-/** 自動選出最強的 3 張已孵化且在牧場中（未放入倉庫）的神獸卡匣作為預設出戰牌組 */
+/** 自動選出最強的 3 張已孵化且在牧場中（未放入倉庫且未重傷）的神獸卡匣作為預設出戰牌組 */
 export function getResolvedBattleDeck(
   beasts: BeastInstance[],
   savedDeckIds?: string[]
 ): BeastInstance[] {
-  const hatched = beasts.filter((b) => b.stage !== 'egg' && !b.inStorage);
+  const hatched = beasts.filter(
+    (b) => b.stage !== 'egg' && !b.inStorage && !b.isInjured
+  );
   if (hatched.length === 0) return [];
 
   const byId = new Map(hatched.map((b) => [b.instanceId, b]));

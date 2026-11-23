@@ -44,6 +44,7 @@ import {
   getRanchMaxAuraSummary,
   getStageDisplayInfo,
   getStageForLevel,
+  getSubDeckSynergySummary,
   resolveActiveCompanion
 } from './utils/beastPerks';
 import { PronunciationStage } from './components/quiz/PronunciationStage';
@@ -126,7 +127,19 @@ export default function App() {
 
   const activeCompanion = useMemo(() => {
     if (!profile || !beasts) return null;
-    return resolveActiveCompanion(profile, beasts, speciesMap);
+    const base = resolveActiveCompanion(profile, beasts, speciesMap);
+    if (!base) return null;
+    const deck = getResolvedBattleDeck(beasts, profile.battleDeckIds);
+    const subSynergy = getSubDeckSynergySummary(deck, base.beast.instanceId);
+    return {
+      ...base,
+      perks: {
+        ...base.perks,
+        extraSeconds:
+          Math.round((base.perks.extraSeconds + subSynergy.bonusSeconds) * 10) / 10,
+        rewardBonusPct: base.perks.rewardBonusPct + subSynergy.bonusCoinsPct
+      }
+    };
   }, [profile, beasts, speciesMap]);
 
   const maxAura = useMemo(
@@ -468,10 +481,11 @@ export default function App() {
               sound.playClick();
               if (view === 'quiz_pronunciation' || view === 'quiz_character') {
                 const confirmed = window.confirm(
-                  '⚠️ 挑戰尚未結束！若現在中途撤退，將以目前已答對題數直接進行結算（若答對率低於 50% 參戰奇獸將損耗等級，低於 20% 參戰奇獸之一將被消滅）。確定要中途撤退嗎？'
+                  '🏳️ 挑戰尚未完成！要執行「戰術安全撤退」返回奇幻牧場嗎？\n（戰術撤退將放棄本局通關獎勵，但參戰奇獸 100% 安全不會降級或重傷；已作答的錯題仍會記錄至錯題本。）'
                 );
                 if (!confirmed) return;
-                handleFinishQuizSession();
+                setShowOutcomeModal(false);
+                setView('ranch');
                 return;
               }
               setShowOutcomeModal(false);
@@ -724,19 +738,22 @@ export default function App() {
             {rewardSummary.battlePenalty && (
               <div
                 className={`w-full p-4 rounded-2xl border-2 text-left font-extrabold text-xs shadow-md ${
+                  rewardSummary.battlePenalty.type === 'injured' ||
                   rewardSummary.battlePenalty.type === 'destroyed'
                     ? 'bg-rose-950 text-rose-100 border-rose-500'
                     : 'bg-amber-50 text-amber-950 border-amber-400'
                 }`}
               >
                 <div className="text-sm font-black">
-                  {rewardSummary.battlePenalty.type === 'destroyed'
-                    ? `💀 慘敗重創：參戰奇獸【${rewardSummary.battlePenalty.beastEmoji} ${rewardSummary.battlePenalty.beastName} (Lv.${rewardSummary.battlePenalty.previousLevel})】已被消滅！`
+                  {rewardSummary.battlePenalty.type === 'injured' ||
+                  rewardSummary.battlePenalty.type === 'destroyed'
+                    ? `🩹 慘敗重傷：參戰奇獸【${rewardSummary.battlePenalty.beastEmoji} ${rewardSummary.battlePenalty.beastName} (降至 Lv.${rewardSummary.battlePenalty.newLevel})】進入重傷休養狀態！`
                     : `💔 戰損降級：參戰奇獸【${rewardSummary.battlePenalty.beastEmoji} ${rewardSummary.battlePenalty.beastName}】等級從 Lv.${rewardSummary.battlePenalty.previousLevel} 降至 Lv.${rewardSummary.battlePenalty.newLevel}！`}
                 </div>
                 <p className="mt-1 opacity-90">
-                  {rewardSummary.battlePenalty.type === 'destroyed'
-                    ? '因答對率低於 20%，該參戰奇獸已從牧場陣亡消失！可前往「奇獸倉庫」將備用的重複奇獸放回牧場替補。'
+                  {rewardSummary.battlePenalty.type === 'injured' ||
+                  rewardSummary.battlePenalty.type === 'destroyed'
+                    ? '因答對率低於 20%，該奇獸已退回牧場重傷休養（奇獸與圖鑑皆永久保留，不會消失）！在測驗中累計答對 12 題或在牧場餵食 2 株靈氣牧草即可完全康復！'
                     : '因挑戰失敗且答對率低於 50%，參戰奇獸遭受重創損耗等級！下次請小心作答喔！'}
                 </p>
               </div>

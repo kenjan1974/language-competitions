@@ -434,13 +434,17 @@ export function getBeastUpgradeRequirement(params: {
   };
 }
 
-/** 計算全牧場「滿級神獸常駐祝福」加成（僅計算在牧場草地上、未放入倉庫的 Lv.6 神獸，每隻提供 +5% 金幣） */
+/** 計算全牧場「滿級神獸常駐祝福」加成（僅計算在牧場草地上、未放入倉庫且未重傷的 Lv.6 神獸，每隻提供 +5% 金幣） */
 export function getRanchMaxAuraSummary(beasts: BeastInstance[]): {
   maxedCount: number;
   globalCoinBonusPct: number;
 } {
   const maxedCount = beasts.filter(
-    (b) => b.stage !== 'egg' && !b.inStorage && getBeastLevel(b) >= MAX_BEAST_LEVEL
+    (b) =>
+      b.stage !== 'egg' &&
+      !b.inStorage &&
+      !b.isInjured &&
+      getBeastLevel(b) >= MAX_BEAST_LEVEL
   ).length;
   return {
     maxedCount,
@@ -448,9 +452,45 @@ export function getRanchMaxAuraSummary(beasts: BeastInstance[]): {
   };
 }
 
-/** 自動尋找最適合擔任「🛡️ 斥候小兵」的低等或重複奇獸（優先從牧場找 Lv.1~2 重複幼獸；若牧場全是大將，也可從倉庫調出 1 隻 Lv.1~2 小兵） */
+/** 計算 3 卡槽中「副將卡匣（第 2、3 張卡）」提供的日常與對戰協同加成 */
+export interface SubDeckSynergySummary {
+  subBeasts: BeastInstance[];
+  bonusCoinsPct: number;
+  bonusSeconds: number;
+}
+
+export function getSubDeckSynergySummary(
+  deck: BeastInstance[],
+  activeCompanionId?: string | null
+): SubDeckSynergySummary {
+  const subBeasts = deck
+    .filter(
+      (b) =>
+        b.stage !== 'egg' &&
+        !b.inStorage &&
+        !b.isInjured &&
+        b.instanceId !== activeCompanionId
+    )
+    .slice(0, 2);
+
+  let bonusCoinsPct = 0;
+  let bonusSeconds = 0;
+  for (const b of subBeasts) {
+    const lv = getBeastLevel(b);
+    bonusCoinsPct += lv * 2; // 每名副將提供 +2% ~ +12% 金幣協同
+    bonusSeconds += lv >= 5 ? 0.5 : lv >= 3 ? 0.3 : 0.1;
+  }
+
+  return {
+    subBeasts,
+    bonusCoinsPct,
+    bonusSeconds: Math.round(bonusSeconds * 10) / 10
+  };
+}
+
+/** 自動尋找最適合擔任「🛡️ 斥候小兵」的低等或重複奇獸（優先從牧場找未重傷的 Lv.1~2 重複幼獸；若牧場全是大將，也可從倉庫調出 1 隻 Lv.1~2 小兵） */
 export function findBestScoutCandidate(beasts: BeastInstance[]): BeastInstance | null {
-  const hatched = beasts.filter((b) => b.stage !== 'egg');
+  const hatched = beasts.filter((b) => b.stage !== 'egg' && !b.isInjured);
   if (hatched.length === 0) return null;
 
   // 統計各品種數量，優先挑有重複且等級最低的小兵
@@ -486,10 +526,15 @@ export function findBestScoutCandidate(beasts: BeastInstance[]): BeastInstance |
   return sorted[0];
 }
 
-/** 自動尋找最強的「⚔️ 主力大將」（優先挑牧場上等級最高、稀有度最高的神獸） */
+/** 自動尋找最強的「⚔️ 主力大將」（優先挑牧場上未重傷且等級最高、稀有度最高的神獸） */
 export function findBestGeneralCandidate(beasts: BeastInstance[]): BeastInstance | null {
-  const hatched = beasts.filter((b) => b.stage !== 'egg' && !b.inStorage);
-  const pool = hatched.length > 0 ? hatched : beasts.filter((b) => b.stage !== 'egg');
+  const hatched = beasts.filter(
+    (b) => b.stage !== 'egg' && !b.inStorage && !b.isInjured
+  );
+  const pool =
+    hatched.length > 0
+      ? hatched
+      : beasts.filter((b) => b.stage !== 'egg' && !b.isInjured);
   if (pool.length === 0) return null;
 
   const RARITY_ORDER: Record<Rarity, number> = { N: 1, R: 2, SR: 3, SSR: 4 };
@@ -505,13 +550,15 @@ export function findBestGeneralCandidate(beasts: BeastInstance[]): BeastInstance
   return sorted[0];
 }
 
-/** 解析目前出戰夥伴（僅從牧場上未放入倉庫的已孵化神獸中挑選，並依出征兵法策略自動匹配小兵或大將） */
+/** 解析目前出戰夥伴（僅從牧場上未放入倉庫且未重傷的已孵化神獸中挑選，並依出征兵法策略自動匹配小兵或大將） */
 export function resolveActiveCompanion(
   profile: PlayerProfile,
   beasts: BeastInstance[],
   speciesMap: Map<string, BeastSpecies>
 ): ActiveCompanionData | null {
-  const hatched = beasts.filter((b) => b.stage !== 'egg' && !b.inStorage);
+  const hatched = beasts.filter(
+    (b) => b.stage !== 'egg' && !b.inStorage && !b.isInjured
+  );
   if (hatched.length === 0) return null;
 
   let chosen = hatched.find((b) => b.instanceId === profile.activeBeastId);

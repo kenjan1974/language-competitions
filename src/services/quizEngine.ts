@@ -4,10 +4,20 @@ import {
   UserQuestionProgress,
   ProficiencyLevel,
   BeastInstance,
-  BossEnemy
+  BossEnemy,
+  Rarity
 } from '../types/game';
-import { BEAST_SPECIES_LIST } from '../data/beasts';
-import { BeastPerks } from '../utils/beastPerks';
+import { BEAST_SPECIES_LIST, pickSmartEggSpecies } from '../data/beasts';
+import { getResolvedBattleDeck } from '../data/bosses';
+import {
+  BeastPerks,
+  computeBeastDemotion,
+  computeFeedOutcome,
+  getBeastLevel,
+  getStageDisplayInfo,
+  getStageForLevel,
+  MAX_BEAST_LEVEL
+} from '../utils/beastPerks';
 
 export type QuizSubMode =
   | 'smart_balanced'
@@ -20,6 +30,16 @@ export interface QuizSessionData {
   boss?: BossEnemy;
   pronunciationQuestions: QuestionItem[];
   characterQuestions: QuestionItem[];
+}
+
+export interface BattlePenaltySummary {
+  type: 'level_down' | 'destroyed';
+  beastInstanceId: string;
+  beastName: string;
+  beastEmoji: string;
+  rarity: Rarity;
+  previousLevel: number;
+  newLevel: number;
 }
 
 export interface QuizRewardSummary {
@@ -41,6 +61,12 @@ export interface QuizRewardSummary {
   companionBonusGems: number;
   companionBonusEggSteps: number;
   companionName?: string;
+  battlePenalty?: BattlePenaltySummary;
+  tacticalStance?: 'scout' | 'general';
+  scoutExpEarned?: number;
+  scoutLeveledUp?: boolean;
+  scoutNewLevel?: number;
+  generalBonusCoins?: number;
 }
 
 /** 陣列隨機洗牌 */
@@ -439,6 +465,7 @@ export async function settleQuizRewards(params: {
   companionPerks?: BeastPerks | null;
   companionName?: string;
   globalCoinBonusPct?: number;
+  participatingDeck?: BeastInstance[];
 }): Promise<QuizRewardSummary> {
   const {
     mode,
@@ -452,7 +479,8 @@ export async function settleQuizRewards(params: {
     baseEggStepsEarned,
     companionPerks,
     companionName,
-    globalCoinBonusPct = 0
+    globalCoinBonusPct = 0,
+    participatingDeck
   } = params;
 
   const safeTotal = Math.max(1, totalQuestions);
@@ -499,19 +527,32 @@ export async function settleQuizRewards(params: {
     (correctCount === safeTotal ? 5 : 0) +
     (maxCombo >= 5 ? 3 : maxCombo >= 3 ? 1 : 0);
 
-  // 套用出戰神獸夥伴加成與全牧場滿級祝福
+  // 套用出戰神獸夥伴加成、全牧場滿級祝福、以及「⚔️ 主力大將御駕親征 (+25% 統帥加碼)」
+  const profilePre = await db.profile.get('default_player');
+  const tacticalStance: 'scout' | 'general' =
+    profilePre?.tacticalStance === 'scout' ? 'scout' : 'general';
+  const isGeneralStance =
+    tacticalStance === 'general' && (companionPerks?.level ?? 1) >= 3;
+
+  const generalBonusCoins =
+    passed && isGeneralStance ? Math.round(rawCoins * 0.25) : 0;
+  const generalBonusForage = passed && isGeneralStance ? 1 : 0;
+
   const totalCoinPct =
     (companionPerks ? companionPerks.rewardBonusPct + companionPerks.extraCoinsPct : 0) +
     globalCoinBonusPct;
   const companionBonusCoins =
-    totalCoinPct > 0 ? Math.round((rawCoins * totalCoinPct) / 100) : 0;
+    (totalCoinPct > 0 ? Math.round((rawCoins * totalCoinPct) / 100) : 0) +
+    generalBonusCoins;
 
   const companionForagePctBonus =
     companionPerks && companionPerks.rewardBonusPct > 0
       ? Math.round((rawForage * companionPerks.rewardBonusPct) / 100)
       : 0;
   const companionBonusForage =
-    companionForagePctBonus + (companionPerks?.extraForage ?? 0);
+    companionForagePctBonus +
+    (companionPerks?.extraForage ?? 0) +
+    generalBonusForage;
 
   const companionBonusGems = passed ? companionPerks?.extraGems ?? 0 : 0;
   const companionBonusEggSteps = passed ? companionPerks?.extraEggSteps ?? 0 : 0;
@@ -558,10 +599,17 @@ export async function settleQuizRewards(params: {
   }
 
   let droppedEgg: BeastInstance | undefined;
-  const profile = await db.profile.get('default_player');
+  let battlePenalty: BattlePenaltySummary | undefined;
+  const [profile, allBeasts, allProgress] = await Promise.all([
+    db.profile.get('default_player'),
+    db.beasts.toArray(),
+    db.progress.toArray()
+  ]);
+  const masteredCount = allProgress.filter((p) => p.proficiency >= 2).length;
   const alreadyDefeatedBosses = profile?.defeatedBossIds || [];
+  const speciesMap = new Map(BEAST_SPECIES_LIST.map((s) => [s.speciesId, s]));
 
-  // 魔王首勝必定掉落專屬限定神蛋；否則一般通關高分機率掉落神秘蛋
+  // 魔王首勝必定掉落專屬限定神蛋；否則一般通關高分機率掉落已解鎖世代的智慧神秘蛋
   if (
     mode === 'boss_battle' &&
     bossDefeated &&
@@ -587,15 +635,16 @@ export async function settleQuizRewards(params: {
       await db.beasts.put(droppedEgg);
     }
   } else {
-    const currentEggs = await db.beasts.where('stage').equals('egg').count();
+    const currentEggs = allBeasts.filter((b) => b.stage === 'egg').length;
     if (passed && currentEggs < 3 && correctCount >= Math.ceil(safeTotal * 0.7)) {
       const roll = Math.random();
       if (roll < 0.45) {
-        const normalOrRarePool = BEAST_SPECIES_LIST.filter(
-          (s) => s.rarity === 'N' || s.rarity === 'R'
-        );
-        const picked =
-          normalOrRarePool[Math.floor(Math.random() * normalOrRarePool.length)];
+        const picked = pickSmartEggSpecies({
+          allowedRarities: accuracy >= 90 ? ['N', 'R', 'SR'] : ['N', 'R'],
+          masteredCount,
+          ownedBeasts: allBeasts,
+          preferLatestGen: true
+        });
         droppedEgg = {
           instanceId: `beast_drop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           speciesId: picked.speciesId,
@@ -609,6 +658,136 @@ export async function settleQuizRewards(params: {
           obtainedAt: Date.now()
         };
         await db.beasts.put(droppedEgg);
+      }
+    }
+  }
+
+  // 斥候小兵實戰歷練機制：
+  // 若採用「🛡️ 斥候小兵探路陣」（或出戰夥伴等級 < 6）且成功通關，參戰小兵直接獲得 +15 EXP 戰場實戰經驗！
+  let scoutExpEarned = 0;
+  let scoutLeveledUp = false;
+  let scoutNewLevel: number | undefined;
+
+  if (passed && profile?.activeBeastId) {
+    const activeScout = allBeasts.find(
+      (b) => b.instanceId === profile.activeBeastId && b.stage !== 'egg'
+    );
+    if (activeScout) {
+      const scoutLv = getBeastLevel(activeScout);
+      const sp = speciesMap.get(activeScout.speciesId);
+      if (sp && scoutLv < MAX_BEAST_LEVEL && (tacticalStance === 'scout' || scoutLv <= 3)) {
+        scoutExpEarned = 15;
+        const { updatedBeast, leveledUp } = computeFeedOutcome(
+          activeScout,
+          sp,
+          scoutExpEarned
+        );
+        await db.beasts.put(updatedBeast);
+        scoutLeveledUp = leveledUp;
+        scoutNewLevel = getBeastLevel(updatedBeast);
+      }
+    }
+  }
+
+  // 戰敗戰損懲罰機制：
+  // - 若採用「🛡️ 斥候小兵探路陣」：主力大將留在後營受保護，僅由先鋒斥候小兵承擔戰損風險！
+  // - 若採用「⚔️ 主力大將決戰陣」：參戰的主力大將與出戰卡槽共同承擔戰損風險！
+  // 1. 若答對率低於 20% (隨意亂猜慘敗)：參戰的奇獸其中之一力竭被消滅（從牧場移除）！
+  // 2. 若挑戰失敗且答對率低於 50% (20% <= accuracy < 50%)：參戰的奇獸其中之一損耗 1 個等級！
+  let nextActiveBeastId = profile?.activeBeastId;
+  let nextBattleDeckIds = profile?.battleDeckIds;
+
+  if (!passed && accuracy < 50) {
+    const activeRanchBeasts = allBeasts.filter(
+      (b) => b.stage !== 'egg' && !b.inStorage
+    );
+    let candidates: BeastInstance[] = [];
+
+    // 若是「🛡️ 斥候小兵探路陣」且非魔王機台戰，強制只讓該名先鋒斥候小兵承擔風險，100% 保護後方主力大將！
+    if (tacticalStance === 'scout' && mode !== 'boss_battle' && profile?.activeBeastId) {
+      const scoutOnly = activeRanchBeasts.find(
+        (b) => b.instanceId === profile.activeBeastId
+      );
+      if (scoutOnly) {
+        candidates = [scoutOnly];
+      }
+    }
+
+    if (candidates.length === 0 && participatingDeck && participatingDeck.length > 0) {
+      const deckIds = new Set(participatingDeck.map((d) => d.instanceId));
+      candidates = activeRanchBeasts.filter((b) => deckIds.has(b.instanceId));
+    }
+    if (candidates.length === 0 && profile?.activeBeastId) {
+      const activeOne = activeRanchBeasts.find(
+        (b) => b.instanceId === profile.activeBeastId
+      );
+      if (activeOne) candidates.push(activeOne);
+    }
+    if (candidates.length === 0) {
+      candidates = getResolvedBattleDeck(activeRanchBeasts, profile?.battleDeckIds);
+    }
+    if (candidates.length === 0 && activeRanchBeasts.length > 0) {
+      candidates = [activeRanchBeasts[0]];
+    }
+
+    if (candidates.length > 0) {
+      if (accuracy < 20) {
+        // 低於 2 成：隨機一隻參戰奇獸被消滅！
+        const victim = candidates[Math.floor(Math.random() * candidates.length)];
+        const sp = speciesMap.get(victim.speciesId);
+        const prevLv = getBeastLevel(victim);
+        const prevStage = getStageForLevel(prevLv);
+        const stageInfo = sp ? getStageDisplayInfo(prevStage, sp) : null;
+
+        await db.beasts.delete(victim.instanceId);
+        if (nextActiveBeastId === victim.instanceId) {
+          nextActiveBeastId = null;
+        }
+        if (Array.isArray(nextBattleDeckIds)) {
+          nextBattleDeckIds = nextBattleDeckIds.filter(
+            (id) => id !== victim.instanceId
+          );
+        }
+
+        battlePenalty = {
+          type: 'destroyed',
+          beastInstanceId: victim.instanceId,
+          beastName: stageInfo?.name || victim.nickname,
+          beastEmoji: stageInfo?.emoji || '🦊',
+          rarity: victim.rarity,
+          previousLevel: prevLv,
+          newLevel: 0
+        };
+      } else {
+        // 20% ~ 49%：參戰奇獸之一損耗 1 個等級（優先挑選 Lv.2 以上或有經驗值的參戰奇獸）
+        const upgradableCandidates = candidates.filter(
+          (b) => getBeastLevel(b) > 1 || b.currentExp > 0
+        );
+        const poolToPick =
+          upgradableCandidates.length > 0 ? upgradableCandidates : candidates;
+        const victim = poolToPick[Math.floor(Math.random() * poolToPick.length)];
+        const sp = speciesMap.get(victim.speciesId);
+
+        if (sp) {
+          const prevLv = getBeastLevel(victim);
+          const prevStage = getStageForLevel(prevLv);
+          const prevStageInfo = getStageDisplayInfo(prevStage, sp);
+          const { updatedBeast, previousLevel, newLevel } = computeBeastDemotion(
+            victim,
+            sp
+          );
+          await db.beasts.put(updatedBeast);
+
+          battlePenalty = {
+            type: 'level_down',
+            beastInstanceId: victim.instanceId,
+            beastName: prevStageInfo.name,
+            beastEmoji: prevStageInfo.emoji,
+            rarity: victim.rarity,
+            previousLevel,
+            newLevel
+          };
+        }
       }
     }
   }
@@ -627,7 +806,9 @@ export async function settleQuizRewards(params: {
       totalAnswered: profile.totalAnswered + totalQuestions,
       totalCorrect: profile.totalCorrect + correctCount,
       highCombo: Math.max(profile.highCombo, maxCombo),
-      defeatedBossIds: nextDefeatedBossIds
+      defeatedBossIds: nextDefeatedBossIds,
+      activeBeastId: nextActiveBeastId,
+      battleDeckIds: nextBattleDeckIds
     });
   }
 
@@ -656,6 +837,12 @@ export async function settleQuizRewards(params: {
     companionBonusForage,
     companionBonusGems,
     companionBonusEggSteps,
-    companionName
+    companionName,
+    battlePenalty,
+    tacticalStance,
+    scoutExpEarned,
+    scoutLeveledUp,
+    scoutNewLevel,
+    generalBonusCoins
   };
 }

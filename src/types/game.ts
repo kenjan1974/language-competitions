@@ -35,6 +35,8 @@ export interface BeastSpecies {
   element: ElementType;
   eggName: string;
   eggStepsRequired: number;    // 孵出所需答對題數
+  generation?: number;         // 第幾世代奇獸 (1 ~ 5)
+  unlockMasteredCount?: number;// 需累計通過幾題才解鎖此奇獸進入蛋池 (預設 0)
   stages: {
     baby: { name: string; emoji: string; description: string; expRequired: number };
     adult: { name: string; emoji: string; description: string; expRequired: number };
@@ -53,6 +55,7 @@ export interface BeastInstance {
   eggTarget: number;           // 孵化目標步數
   currentExp: number;          // 餵食牧草累積的經驗值
   level?: number;              // 奇獸等級 (Lv.1 ~ Lv.6；舊存檔未設定時依 stage 自動推算)
+  inStorage?: boolean;         // 是否已收納至「奇獸倉庫」（倉庫中的奇獸不佔牧場空間、亦不會上場戰損）
   obtainedAt: number;
 }
 
@@ -88,6 +91,8 @@ export interface MilestoneGoal {
   unlockSpeciesId?: string;      // 達成里程碑贈送的專屬神獸蛋
 }
 
+export type TacticalStance = 'scout' | 'general'; // scout: 斥候小兵探路陣(保護主力+小兵歷練EXP) | general: 主力大將決戰陣(全技能+統帥加碼+高風險)
+
 export interface PlayerProfile {
   id: 'default_player';
   nickname: string;
@@ -101,7 +106,9 @@ export interface PlayerProfile {
   handwritingMode: 'auto' | 'canvas_only'; // auto: 優先 HanziWriter 盲寫，失敗降級 Canvas; canvas_only: 一律自由手寫翻牌
   soundEnabled: boolean;
   activeBeastId?: string | null;   // 目前設為「出戰夥伴」陪考的神獸 instanceId
+  tacticalStance?: TacticalStance; // 出征兵法策略：'scout' (斥候小兵探路) 或 'general' (主力大將出馬)
   defeatedBossIds?: string[];      // 已擊敗的強敵首領 ID 列表
   claimedMilestoneIds?: string[];  // 已領取獎勵的題庫階段目標 ID 列表
   battleDeckIds?: string[];        // 玩家編成的 3 張出戰神獸卡匣 instanceId
+  shopPurchaseCounts?: Record<string, number>; // 各商品累計購買次數（用於循序漸進提升答題門檻）
 }

@@ -70,7 +70,7 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
   const hatchedBeasts = useMemo(
     () =>
       beasts
-        .filter((b) => b.stage !== 'egg')
+        .filter((b) => b.stage !== 'egg' && !b.inStorage)
         .sort((a, b) => getSingleBeastPower(b) - getSingleBeastPower(a)),
     [beasts]
   );
@@ -114,7 +114,40 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
     });
   };
 
-  // 一鍵自動編成針對該魔王弱點的最強 3 張卡匣
+  // 一鍵編成「🛡️ 斥候小兵偵察隊」（優先挑選等級最低的 Lv.1~2 小兵探路，保護主力大將卡匣）
+  const handleAutoBuildScoutDeck = async () => {
+    sound.playClick();
+    const allHatched = beasts.filter((b) => b.stage !== 'egg');
+    if (allHatched.length === 0) {
+      setBannerNotice('⚠️ 你還沒有已孵化的神獸卡匣！請先回牧場孵蛋喔！');
+      return;
+    }
+
+    const sortedScouts = [...allHatched].sort((a, b) => {
+      const lvDiff = getBeastLevel(a) - getBeastLevel(b);
+      if (lvDiff !== 0) return lvDiff;
+      return getSingleBeastPower(a) - getSingleBeastPower(b);
+    });
+
+    const chosenScouts = sortedScouts.slice(0, 3);
+    for (const s of chosenScouts) {
+      if (s.inStorage) {
+        await db.beasts.update(s.instanceId, { inStorage: false });
+      }
+    }
+
+    const scoutIds = chosenScouts.map((b) => b.instanceId);
+    await db.profile.update('default_player', {
+      battleDeckIds: scoutIds,
+      tacticalStance: 'scout',
+      activeBeastId: scoutIds[0]
+    });
+    setBannerNotice(
+      '🛡️ 已換上【斥候小兵偵察卡組】！可先用低等小兵測試魔王題型，主力 Lv.6 大將卡匣零風險！'
+    );
+  };
+
+  // 一鍵自動編成針對該魔王弱點的「⚔️ 主力大將決戰卡組」
   const handleAutoBuildDeckForBoss = async (boss: BossEnemy) => {
     sound.playClick();
     if (hatchedBeasts.length === 0) {
@@ -134,9 +167,11 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
 
     const bestThreeIds = sortedForBoss.slice(0, 3).map((b) => b.instanceId);
     await db.profile.update('default_player', {
-      battleDeckIds: bestThreeIds
+      battleDeckIds: bestThreeIds,
+      tacticalStance: 'general',
+      activeBeastId: bestThreeIds[0]
     });
-    setBannerNotice(`⚡ 已針對【${boss.name}】弱點自動換上最強克制卡匣組合！`);
+    setBannerNotice(`⚔️ 已針對【${boss.name}】弱點派上最強【主力大將克制卡組】！`);
   };
 
   // 領取階段里程碑獎勵
@@ -203,7 +238,7 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
                 神獸卡匣對戰機台 & 100% 制霸殿堂
               </h2>
               <p className="text-xs text-indigo-200 font-semibold">
-                收集神獸卡匣 ➔ 餵牧草升級升星（★1 ➔ ★3 ➔ ★5，Lv.1～Lv.6）➔ 排出屬性克制卡組打倒歷屆大魔王！
+                收集神獸卡匣 ➔ 餵牧草升級升星 ➔ 打倒歷屆大魔王！（⚠️ 注意：挑戰答對率低於 50% 參戰奇獸會降級，低於 20% 參戰奇獸之一會被消滅！）
               </p>
             </div>
           </div>
@@ -549,13 +584,23 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
                     </div>
 
                     {/* 底部行動按鈕 */}
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-1.5 pt-1 flex-wrap sm:flex-nowrap">
+                      <button
+                        type="button"
+                        onClick={handleAutoBuildScoutDeck}
+                        title="還沒有把握時，先派 Lv.1 小兵卡組去測試題型，保護主力大將不掉級！"
+                        className="px-2.5 py-2.5 rounded-xl bg-sky-900/80 hover:bg-sky-800 border border-sky-400/50 text-xs font-extrabold text-sky-200 shrink-0 transition"
+                      >
+                        🛡️ 小兵探路
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => handleAutoBuildDeckForBoss(boss)}
-                        className="px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-extrabold text-amber-300 shrink-0 transition"
+                        title="有信心時，一鍵換上針對此魔王弱點的最強主力大將卡組！"
+                        className="px-2.5 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 border border-amber-400/40 text-xs font-extrabold text-amber-300 shrink-0 transition"
                       >
-                        ⚡ 一鍵配卡
+                        ⚔️ 大將配卡
                       </button>
 
                       {!isQuestionsUnlocked ? (

@@ -78,12 +78,12 @@ export function getSingleBeastPower(beast: BeastInstance): number {
   return row[stage] ?? 100;
 }
 
-/** 自動選出最強的 3 張已孵化神獸卡匣作為預設出戰牌組 */
+/** 自動選出最強的 3 張已孵化且在牧場中（未放入倉庫）的神獸卡匣作為預設出戰牌組 */
 export function getResolvedBattleDeck(
   beasts: BeastInstance[],
   savedDeckIds?: string[]
 ): BeastInstance[] {
-  const hatched = beasts.filter((b) => b.stage !== 'egg');
+  const hatched = beasts.filter((b) => b.stage !== 'egg' && !b.inStorage);
   if (hatched.length === 0) return [];
 
   const byId = new Map(hatched.map((b) => [b.instanceId, b]));
@@ -206,7 +206,7 @@ export const BOSS_LIST: BossEnemy[] = [
     rewardCoins: 400,
     rewardGems: 25,
     rewardForage: 15,
-    rewardSpeciesId: 'nebula_unicorn'
+    rewardSpeciesId: 'golden_griffin'
   },
   {
     bossId: 'boss_4_phantom_wyrm',
@@ -224,7 +224,7 @@ export const BOSS_LIST: BossEnemy[] = [
     rewardCoins: 600,
     rewardGems: 35,
     rewardForage: 20,
-    rewardSpeciesId: 'phoenix_chick'
+    rewardSpeciesId: 'void_bahamut'
   },
   {
     bossId: 'boss_5_frost_emperor',
@@ -242,7 +242,7 @@ export const BOSS_LIST: BossEnemy[] = [
     rewardCoins: 850,
     rewardGems: 50,
     rewardForage: 25,
-    rewardSpeciesId: 'celestial_dragon'
+    rewardSpeciesId: 'seraph_angel_cat'
   },
   {
     bossId: 'boss_6_star_warden',
@@ -260,7 +260,7 @@ export const BOSS_LIST: BossEnemy[] = [
     rewardCoins: 1200,
     rewardGems: 70,
     rewardForage: 35,
-    rewardSpeciesId: 'chrono_kitsune'
+    rewardSpeciesId: 'galaxy_kunpeng'
   },
   {
     bossId: 'boss_7_ultimate_chaos',
@@ -314,58 +314,58 @@ export const MILESTONE_GOALS: MilestoneGoal[] = [
   },
   {
     milestoneId: 'ms_150',
-    title: '字音劍客・150 題達成',
+    title: '字音劍客・150 題達成（解鎖第 2 世代奇獸！）',
     badgeEmoji: '⚔️',
     targetCount: 150,
-    description: '累計熟悉通過 150 道考古題，獲贈 R 級【晶岩厚甲蛋】強化卡組防禦！',
+    description: '累計熟悉通過 150 道考古題！正式開放【第 2 世代 5 種全新奇獸】進入抽蛋池，並獲贈 SR 級【翡翠琉璃羽蛋】！',
     rewardCoins: 250,
     rewardGems: 15,
     rewardSpeedTickets: 3,
-    unlockSpeciesId: 'crystal_turtle'
+    unlockSpeciesId: 'emerald_peacock'
   },
   {
     milestoneId: 'ms_250',
-    title: '筆順宗師・250 題階段大目標達成！',
+    title: '筆順宗師・250 題階段達成（解鎖第 3 世代奇獸！）',
     badgeEmoji: '🏅',
     targetCount: 250,
-    description: '重要階段目標達成！累計通過 250 題，直接獲贈 SR 級【星雲幻夢蛋】與魔王挑戰資格！',
+    description: '累計通過 250 題！開放【第 3 世代 5 種宗師奇獸】進入抽蛋池，並直接獲贈 SR 級【萬年神木靈蛋】！',
     rewardCoins: 400,
     rewardGems: 25,
     rewardSpeedTickets: 4,
-    unlockSpeciesId: 'nebula_unicorn'
+    unlockSpeciesId: 'ancient_treant'
   },
   {
     milestoneId: 'ms_500',
-    title: '文曲星使・500 題榮耀突破！',
+    title: '文曲星使・500 題榮耀突破（解鎖第 4 世代奇獸！）',
     badgeEmoji: '🌟',
     targetCount: 500,
-    description: '完成 500 題試煉！直接獲贈 SR 級【涅槃赤金蛋】大幅提升火系卡組戰力！',
+    description: '完成 500 題試煉！開放【第 4 世代 5 種文曲聖域奇獸】進入抽蛋池，並獲贈 SR 級【紫金祥瑞火蛋】！',
     rewardCoins: 600,
     rewardGems: 35,
     rewardSpeedTickets: 5,
-    unlockSpeciesId: 'phoenix_chick'
+    unlockSpeciesId: 'blazing_qilin'
   },
   {
     milestoneId: 'ms_750',
-    title: '全國賽菁英・750 題制霸！',
+    title: '全國賽菁英・750 題制霸（解鎖第 5 世代四象神獸！）',
     badgeEmoji: '👑',
     targetCount: 750,
-    description: '累計通過 750 道考古題！解鎖傳說 SSR 級【蒼穹龍吟神秘蛋】！',
+    description: '累計通過 750 道考古題！開放【第 5 世代四象至尊神話神獸】，並獲贈 SSR 級【南方朱雀神蛋】！',
     rewardCoins: 900,
     rewardGems: 50,
     rewardSpeedTickets: 6,
-    unlockSpeciesId: 'celestial_dragon'
+    unlockSpeciesId: 'vermilion_emperor'
   },
   {
     milestoneId: 'ms_1000',
-    title: '千字大宗師・1000 題聖殿解鎖！',
+    title: '千字大宗師・1000 題聖殿解鎖（解鎖創世祖龍！）',
     badgeEmoji: '🏛️',
     targetCount: 1000,
-    description: '突破 1,000 題大關！解鎖傳說 SSR 級【時光琉璃聖蛋】！',
+    description: '突破 1,000 題大關！解鎖最終第 5 世代至高神獸 SSR 級【創世太初神蛋】！',
     rewardCoins: 1200,
     rewardGems: 70,
     rewardSpeedTickets: 8,
-    unlockSpeciesId: 'chrono_kitsune'
+    unlockSpeciesId: 'genesis_creator_dragon'
   },
   {
     milestoneId: 'ms_100_percent',

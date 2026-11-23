@@ -207,7 +207,9 @@ export default function App() {
     subMode: QuizSubMode = 'smart_balanced'
   ) => {
     const session = await generateStandardQuiz(subMode);
+    const resolvedDeck = getResolvedBattleDeck(beasts, profile.battleDeckIds);
     setQuizSession(session);
+    setActiveDeck(resolvedDeck);
     resetSessionCounters(0);
 
     if (session.pronunciationQuestions.length > 0) {
@@ -220,7 +222,9 @@ export default function App() {
   // 啟動「守護牧場：除魔特訓」關卡
   const handleStartSlimeBossQuiz = async () => {
     const session = await generateSlimeBossQuiz();
+    const resolvedDeck = getResolvedBattleDeck(beasts, profile.battleDeckIds);
     setQuizSession(session);
+    setActiveDeck(resolvedDeck);
     resetSessionCounters(0);
 
     if (session.pronunciationQuestions.length > 0) {
@@ -416,7 +420,13 @@ export default function App() {
       baseEggStepsEarned: eggStepsRef.current,
       companionPerks: activeCompanion?.perks ?? null,
       companionName: activeCompanion?.stageInfo.name,
-      globalCoinBonusPct: maxAura.globalCoinBonusPct
+      globalCoinBonusPct: maxAura.globalCoinBonusPct,
+      participatingDeck:
+        activeDeck.length > 0
+          ? activeDeck
+          : activeCompanion
+          ? [activeCompanion.beast]
+          : []
     });
 
     setRewardSummary(rewards);
@@ -456,6 +466,14 @@ export default function App() {
             type="button"
             onClick={() => {
               sound.playClick();
+              if (view === 'quiz_pronunciation' || view === 'quiz_character') {
+                const confirmed = window.confirm(
+                  '⚠️ 挑戰尚未結束！若現在中途撤退，將以目前已答對題數直接進行結算（若答對率低於 50% 參戰奇獸將損耗等級，低於 20% 參戰奇獸之一將被消滅）。確定要中途撤退嗎？'
+                );
+                if (!confirmed) return;
+                handleFinishQuizSession();
+                return;
+              }
               setShowOutcomeModal(false);
               setView('ranch');
             }}
@@ -634,11 +652,14 @@ export default function App() {
             {(rewardSummary.companionBonusCoins > 0 ||
               rewardSummary.companionBonusForage > 0 ||
               rewardSummary.companionBonusGems > 0 ||
-              rewardSummary.companionBonusEggSteps > 0) && (
+              rewardSummary.companionBonusEggSteps > 0 ||
+              (rewardSummary.scoutExpEarned ?? 0) > 0) && (
               <div className="w-full p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold flex flex-wrap items-center justify-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-indigo-600" />
                 <span>
-                  夥伴加成
+                  {rewardSummary.tacticalStance === 'scout'
+                    ? '🛡️ 斥候先鋒加成'
+                    : '⚔️ 大將統帥加成'}
                   {rewardSummary.companionName ? `（${rewardSummary.companionName}）` : ''}：
                   {rewardSummary.companionBonusCoins > 0 &&
                     ` +${rewardSummary.companionBonusCoins} 金幣`}
@@ -648,6 +669,12 @@ export default function App() {
                     ` +${rewardSummary.companionBonusGems} 寶石`}
                   {rewardSummary.companionBonusEggSteps > 0 &&
                     ` +${rewardSummary.companionBonusEggSteps} 孵蛋步`}
+                  {(rewardSummary.scoutExpEarned ?? 0) > 0 &&
+                    ` ｜ 🎖️ 小兵實戰 +${rewardSummary.scoutExpEarned} EXP${
+                      rewardSummary.scoutLeveledUp
+                        ? ` (升至 Lv.${rewardSummary.scoutNewLevel}!)`
+                        : ''
+                    }`}
                 </span>
               </div>
             )}
@@ -693,6 +720,27 @@ export default function App() {
                 牧場孵蛋巢位已同步推進 <strong>+{rewardSummary.eggStepsAdded}</strong> 步！
               </span>
             </div>
+
+            {rewardSummary.battlePenalty && (
+              <div
+                className={`w-full p-4 rounded-2xl border-2 text-left font-extrabold text-xs shadow-md ${
+                  rewardSummary.battlePenalty.type === 'destroyed'
+                    ? 'bg-rose-950 text-rose-100 border-rose-500'
+                    : 'bg-amber-50 text-amber-950 border-amber-400'
+                }`}
+              >
+                <div className="text-sm font-black">
+                  {rewardSummary.battlePenalty.type === 'destroyed'
+                    ? `💀 慘敗重創：參戰奇獸【${rewardSummary.battlePenalty.beastEmoji} ${rewardSummary.battlePenalty.beastName} (Lv.${rewardSummary.battlePenalty.previousLevel})】已被消滅！`
+                    : `💔 戰損降級：參戰奇獸【${rewardSummary.battlePenalty.beastEmoji} ${rewardSummary.battlePenalty.beastName}】等級從 Lv.${rewardSummary.battlePenalty.previousLevel} 降至 Lv.${rewardSummary.battlePenalty.newLevel}！`}
+                </div>
+                <p className="mt-1 opacity-90">
+                  {rewardSummary.battlePenalty.type === 'destroyed'
+                    ? '因答對率低於 20%，該參戰奇獸已從牧場陣亡消失！可前往「奇獸倉庫」將備用的重複奇獸放回牧場替補。'
+                    : '因挑戰失敗且答對率低於 50%，參戰奇獸遭受重創損耗等級！下次請小心作答喔！'}
+                </p>
+              </div>
+            )}
 
             {rewardSummary.droppedEgg && (
               <div className="w-full p-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold text-sm shadow-md">

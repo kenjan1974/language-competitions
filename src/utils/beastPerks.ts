@@ -320,13 +320,127 @@ export function computeFeedOutcome(
   };
 }
 
-/** 計算全牧場「滿級神獸常駐祝福」加成（每隻 Lv.6 神獸提供 +5% 金幣） */
+/** 計算戰敗懲罰降級（答對率過低時損耗 1 級，最低降至 Lv.1 且經驗值歸零） */
+export function computeBeastDemotion(
+  beast: BeastInstance,
+  species: BeastSpecies
+): {
+  updatedBeast: BeastInstance;
+  previousLevel: number;
+  newLevel: number;
+} {
+  const prevLevel = getBeastLevel(beast);
+  const newLevel = Math.max(1, prevLevel - 1);
+  const newStage = getStageForLevel(newLevel);
+  const newInfo = getStageDisplayInfo(newStage, species);
+
+  return {
+    updatedBeast: {
+      ...beast,
+      level: newLevel,
+      stage: newStage,
+      currentExp: 0,
+      nickname: newInfo.name
+    },
+    previousLevel: prevLevel,
+    newLevel
+  };
+}
+
+/**
+ * 循序漸進的奇獸升級／突破門檻檢定：
+ * 隨著奇獸世代 (Gen 1 ~ Gen 5) 以及玩家已擁有的高階奇獸數量，
+ * 突破至 Lv.3(成體)、Lv.4、Lv.5(覺醒)、Lv.6(滿級) 時會循序漸進要求更多的累計通過題數或累計答對題數。
+ */
+export interface BeastUpgradeRequirement {
+  targetLevel: number;
+  requiredMasteredCount: number;
+  requiredTotalCorrect: number;
+  isBreakthroughStep: boolean;
+  canFeed: boolean;
+  lockReason: string | null;
+}
+
+export function getBeastUpgradeRequirement(params: {
+  beast: BeastInstance;
+  species: BeastSpecies;
+  allBeasts: BeastInstance[];
+  profile: PlayerProfile;
+  masteredCount: number;
+}): BeastUpgradeRequirement {
+  const { beast, species, allBeasts, profile, masteredCount } = params;
+  const currentLevel = getBeastLevel(beast);
+  const targetLevel = Math.min(MAX_BEAST_LEVEL, currentLevel + 1);
+  const expNeeded = getExpRequiredForLevel(currentLevel, species);
+  const isBreakthroughStep =
+    currentLevel < MAX_BEAST_LEVEL && beast.currentExp + FEED_EXP_GAIN >= expNeeded;
+
+  const gen = species.generation ?? 1;
+  const baseMastered = species.unlockMasteredCount ?? 0;
+
+  // 計算玩家目前已擁有幾隻達到 targetLevel 以上的其他奇獸（含倉庫）
+  const existingAtOrAboveTarget = allBeasts.filter(
+    (b) =>
+      b.instanceId !== beast.instanceId &&
+      b.stage !== 'egg' &&
+      getBeastLevel(b) >= targetLevel
+  ).length;
+
+  let requiredMasteredCount = 0;
+  let requiredTotalCorrect = 0;
+
+  if (targetLevel === 2) {
+    requiredMasteredCount = baseMastered;
+    requiredTotalCorrect = 0;
+  } else if (targetLevel === 3) {
+    // 突破 ★3 成體期
+    requiredMasteredCount = baseMastered + (gen > 1 ? 8 : 0);
+    requiredTotalCorrect = baseMastered + 15 + existingAtOrAboveTarget * 6;
+  } else if (targetLevel === 4) {
+    requiredMasteredCount = baseMastered + (gen > 1 ? 15 : 5);
+    requiredTotalCorrect = baseMastered + 30 + existingAtOrAboveTarget * 10;
+  } else if (targetLevel === 5) {
+    // 突破 ★5 傳說覺醒期
+    requiredMasteredCount = baseMastered + (gen > 1 ? 25 : 15);
+    requiredTotalCorrect = baseMastered + 45 + existingAtOrAboveTarget * 15;
+  } else if (targetLevel >= 6) {
+    // 突破 Lv.6 MAX 滿級巔峰
+    requiredMasteredCount = baseMastered + (gen > 1 ? 35 : 25);
+    requiredTotalCorrect = baseMastered + 60 + existingAtOrAboveTarget * 20;
+  }
+
+  const missingMastered = Math.max(0, requiredMasteredCount - masteredCount);
+  const missingCorrect = Math.max(0, requiredTotalCorrect - profile.totalCorrect);
+
+  let lockReason: string | null = null;
+  if (isBreakthroughStep && (missingMastered > 0 || missingCorrect > 0)) {
+    const parts: string[] = [];
+    if (missingMastered > 0) {
+      parts.push(`熟悉通過 ${requiredMasteredCount} 題（還差 ${missingMastered} 題）`);
+    }
+    if (missingCorrect > 0) {
+      parts.push(`累計答對 ${requiredTotalCorrect} 題（還差 ${missingCorrect} 題）`);
+    }
+    lockReason = `🔒 突破 Lv.${targetLevel} 需${parts.join('、')}！先去闖關答題累積實力吧！`;
+  }
+
+  return {
+    targetLevel,
+    requiredMasteredCount,
+    requiredTotalCorrect,
+    isBreakthroughStep,
+    canFeed: lockReason === null,
+    lockReason
+  };
+}
+
+/** 計算全牧場「滿級神獸常駐祝福」加成（僅計算在牧場草地上、未放入倉庫的 Lv.6 神獸，每隻提供 +5% 金幣） */
 export function getRanchMaxAuraSummary(beasts: BeastInstance[]): {
   maxedCount: number;
   globalCoinBonusPct: number;
 } {
   const maxedCount = beasts.filter(
-    (b) => b.stage !== 'egg' && getBeastLevel(b) >= MAX_BEAST_LEVEL
+    (b) => b.stage !== 'egg' && !b.inStorage && getBeastLevel(b) >= MAX_BEAST_LEVEL
   ).length;
   return {
     maxedCount,
@@ -334,22 +448,79 @@ export function getRanchMaxAuraSummary(beasts: BeastInstance[]): {
   };
 }
 
-/** 解析目前出戰夥伴（若未設定或找不到，自動挑選等級最高的已孵化神獸） */
+/** 自動尋找最適合擔任「🛡️ 斥候小兵」的低等或重複奇獸（優先從牧場找 Lv.1~2 重複幼獸；若牧場全是大將，也可從倉庫調出 1 隻 Lv.1~2 小兵） */
+export function findBestScoutCandidate(beasts: BeastInstance[]): BeastInstance | null {
+  const hatched = beasts.filter((b) => b.stage !== 'egg');
+  if (hatched.length === 0) return null;
+
+  // 統計各品種數量，優先挑有重複且等級最低的小兵
+  const speciesCounts = new Map<string, number>();
+  for (const b of hatched) {
+    speciesCounts.set(b.speciesId, (speciesCounts.get(b.speciesId) ?? 0) + 1);
+  }
+
+  const RARITY_ORDER: Record<Rarity, number> = { N: 1, R: 2, SR: 3, SSR: 4 };
+
+  const sorted = [...hatched].sort((a, b) => {
+    // 優先挑 Lv.1 ~ Lv.2 的小兵
+    const lvA = getBeastLevel(a);
+    const lvB = getBeastLevel(b);
+    if (lvA !== lvB) return lvA - lvB;
+
+    // 同等級時，優先挑已在牧場上的 (!inStorage)
+    const stA = a.inStorage ? 1 : 0;
+    const stB = b.inStorage ? 1 : 0;
+    if (stA !== stB) return stA - stB;
+
+    // 優先挑擁有複數重複隻的品種
+    const dupA = (speciesCounts.get(a.speciesId) ?? 1) > 1 ? 0 : 1;
+    const dupB = (speciesCounts.get(b.speciesId) ?? 1) > 1 ? 0 : 1;
+    if (dupA !== dupB) return dupA - dupB;
+
+    // 優先挑稀有度較低、經驗值較少的小兵
+    const rarDiff = RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity];
+    if (rarDiff !== 0) return rarDiff;
+    return a.currentExp - b.currentExp;
+  });
+
+  return sorted[0];
+}
+
+/** 自動尋找最強的「⚔️ 主力大將」（優先挑牧場上等級最高、稀有度最高的神獸） */
+export function findBestGeneralCandidate(beasts: BeastInstance[]): BeastInstance | null {
+  const hatched = beasts.filter((b) => b.stage !== 'egg' && !b.inStorage);
+  const pool = hatched.length > 0 ? hatched : beasts.filter((b) => b.stage !== 'egg');
+  if (pool.length === 0) return null;
+
+  const RARITY_ORDER: Record<Rarity, number> = { N: 1, R: 2, SR: 3, SSR: 4 };
+
+  const sorted = [...pool].sort((a, b) => {
+    const lvDiff = getBeastLevel(b) - getBeastLevel(a);
+    if (lvDiff !== 0) return lvDiff;
+    const rarDiff = RARITY_ORDER[b.rarity] - RARITY_ORDER[a.rarity];
+    if (rarDiff !== 0) return rarDiff;
+    return b.currentExp - a.currentExp;
+  });
+
+  return sorted[0];
+}
+
+/** 解析目前出戰夥伴（僅從牧場上未放入倉庫的已孵化神獸中挑選，並依出征兵法策略自動匹配小兵或大將） */
 export function resolveActiveCompanion(
   profile: PlayerProfile,
   beasts: BeastInstance[],
   speciesMap: Map<string, BeastSpecies>
 ): ActiveCompanionData | null {
-  const hatched = beasts.filter((b) => b.stage !== 'egg');
+  const hatched = beasts.filter((b) => b.stage !== 'egg' && !b.inStorage);
   if (hatched.length === 0) return null;
 
   let chosen = hatched.find((b) => b.instanceId === profile.activeBeastId);
   if (!chosen) {
-    chosen = [...hatched].sort((a, b) => {
-      const diff = getBeastLevel(b) - getBeastLevel(a);
-      if (diff !== 0) return diff;
-      return b.obtainedAt - a.obtainedAt;
-    })[0];
+    if (profile.tacticalStance === 'scout') {
+      chosen = findBestScoutCandidate(hatched) ?? hatched[0];
+    } else {
+      chosen = findBestGeneralCandidate(hatched) ?? hatched[0];
+    }
   }
 
   const species = speciesMap.get(chosen.speciesId);

@@ -343,6 +343,70 @@ class SoundManager {
       osc.stop(now + idx * 0.045 + 0.3);
     });
   }
+
+  /** 戰損降級警告音效（重擊 + 階梯滑落音） */
+  public playBeastLevelDown() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [
+      { freq: 330, delay: 0, dur: 0.14, type: 'sawtooth' as OscillatorType },
+      { freq: 277.18, delay: 0.13, dur: 0.14, type: 'sawtooth' as OscillatorType },
+      { freq: 220, delay: 0.26, dur: 0.18, type: 'sawtooth' as OscillatorType },
+      { freq: 164.81, delay: 0.42, dur: 0.45, type: 'triangle' as OscillatorType }
+    ];
+
+    notes.forEach(({ freq, delay, dur, type }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now + delay);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.88, now + delay + dur);
+
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + delay);
+      osc.stop(now + delay + dur + 0.03);
+    });
+  }
+
+  /** 奇獸陣亡消滅震撼音效（低頻碎裂雷鳴 + 消散音） */
+  public playBeastDestroyed() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const notes = [
+      { freq: 246.94, delay: 0, dur: 0.16, type: 'sawtooth' as OscillatorType },
+      { freq: 185.0, delay: 0.15, dur: 0.18, type: 'sawtooth' as OscillatorType },
+      { freq: 138.59, delay: 0.32, dur: 0.22, type: 'sawtooth' as OscillatorType },
+      { freq: 98.0, delay: 0.52, dur: 0.65, type: 'sawtooth' as OscillatorType }
+    ];
+
+    notes.forEach(({ freq, delay, dur, type }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now + delay);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(45, freq * 0.72), now + delay + dur);
+
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + delay);
+      osc.stop(now + delay + dur + 0.03);
+    });
+  }
 }
 
 export const sound = new SoundManager();

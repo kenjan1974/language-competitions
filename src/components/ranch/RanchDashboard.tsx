@@ -23,7 +23,9 @@ import {
   Flame,
   ShoppingBag,
   Plus,
-  ArrowUpDown
+  ArrowUpDown,
+  Archive,
+  Lock
 } from 'lucide-react';
 import { db } from '../../db/database';
 import {
@@ -33,7 +35,13 @@ import {
   PlayerProfile,
   Rarity
 } from '../../types/game';
-import { BEAST_SPECIES_LIST } from '../../data/beasts';
+import {
+  BEAST_SPECIES_LIST,
+  GENERATION_META,
+  getCurrentUnlockedGeneration,
+  getUnlockedSpeciesPool,
+  pickSmartEggSpecies
+} from '../../data/beasts';
 import {
   BOSS_LIST,
   ELEMENT_META as BOSS_ELEMENT_META,
@@ -51,7 +59,10 @@ import {
   MAX_BEAST_LEVEL,
   computeBeastPerks,
   computeFeedOutcome,
+  findBestGeneralCandidate,
+  findBestScoutCandidate,
   getBeastLevel,
+  getBeastUpgradeRequirement,
   getExpRequiredForLevel,
   getRanchMaxAuraSummary,
   getStageDisplayInfo,
@@ -60,6 +71,7 @@ import {
   resolveActiveCompanion
 } from '../../utils/beastPerks';
 import { BeastLevelUpModal } from './BeastLevelUpModal';
+import { BeastStorageModal } from './BeastStorageModal';
 import { CoinShopModal } from './CoinShopModal';
 
 const PET_SPEECH_LINES = [
@@ -118,6 +130,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   const [showShopModal, setShowShopModal] = useState(false);
   const [shopNotice, setShopNotice] = useState<string | null>(null);
   const [showBestiaryModal, setShowBestiaryModal] = useState(false);
+  const [showStorageModal, setShowStorageModal] = useState(false);
   const [newlyHatchedModal, setNewlyHatchedModal] = useState<{
     beast: BeastInstance;
     species: BeastSpecies;
@@ -136,6 +149,18 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
 
   const eggs = beasts.filter((b) => b.stage === 'egg');
   const activeNestEggs = eggs.slice(0, 3);
+  const storedBeasts = useMemo(
+    () => beasts.filter((b) => b.stage !== 'egg' && Boolean(b.inStorage)),
+    [beasts]
+  );
+  const currentMaxGen = useMemo(
+    () => getCurrentUnlockedGeneration(masteredCount),
+    [masteredCount]
+  );
+  const unlockedSpeciesCount = useMemo(
+    () => getUnlockedSpeciesPool(masteredCount).length,
+    [masteredCount]
+  );
   const hatchedBeasts = useMemo(() => {
     const RARITY_WEIGHT: Record<Rarity, number> = {
       SSR: 4,
@@ -151,7 +176,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
       star: 5
     };
 
-    const list = beasts.filter((b) => b.stage !== 'egg');
+    const list = beasts.filter((b) => b.stage !== 'egg' && !b.inStorage);
     const dir = beastSortAsc ? 1 : -1;
 
     return [...list].sort((a, b) => {
@@ -245,12 +270,61 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
   // 設定出戰夥伴
   const handleSetActiveCompanion = async (instanceId: string) => {
     sound.playClick();
-    await db.profile.update('default_player', {
-      activeBeastId: instanceId
-    });
     const chosen = hatchedBeasts.find((b) => b.instanceId === instanceId);
+    const chosenLv = chosen ? getBeastLevel(chosen) : 1;
+    const nextStance = chosenLv <= 2 ? 'scout' : 'general';
+    await db.profile.update('default_player', {
+      activeBeastId: instanceId,
+      tacticalStance: nextStance
+    });
     if (chosen) {
-      showToast(`⚔️ 已指派「${chosen.nickname}」擔任出戰夥伴，陪你一起闖關！`);
+      showToast(
+        chosenLv <= 2
+          ? `🛡️ 已指派小兵「${chosen.nickname} (Lv.${chosenLv})」擔任先鋒斥候探路，後方主力大將安全無憂！`
+          : `⚔️ 已指派大將「${chosen.nickname} (Lv.${chosenLv})」親自出馬，通關享 +25% 統帥獎勵加碼！`
+      );
+    }
+  };
+
+  // 一鍵切換「🛡️ 斥候小兵探路陣」與「⚔️ 主力大將決戰陣」
+  const handleSwitchTacticalStance = async (stance: 'scout' | 'general') => {
+    sound.playClick();
+    if (stance === 'scout') {
+      const scout = findBestScoutCandidate(beasts);
+      if (!scout) {
+        showToast('⚠️ 目前還沒有已孵化的奇獸喔！請先孵化一顆神秘蛋吧！');
+        return;
+      }
+      if (scout.inStorage) {
+        await db.beasts.update(scout.instanceId, { inStorage: false });
+      }
+      const lv = getBeastLevel(scout);
+      await db.profile.update('default_player', {
+        tacticalStance: 'scout',
+        activeBeastId: scout.instanceId
+      });
+      setSelectedBeastId(scout.instanceId);
+      showToast(
+        `🛡️ 已切換【斥候小兵探路陣】！派出「${scout.nickname} (Lv.${lv})」先鋒試探：主力大將 100% 免受降級或消滅，小兵過關還能獲得 +15 EXP 實戰經驗！`
+      );
+    } else {
+      const general = findBestGeneralCandidate(beasts);
+      if (!general) {
+        showToast('⚠️ 目前還沒有已孵化的奇獸喔！');
+        return;
+      }
+      if (general.inStorage) {
+        await db.beasts.update(general.instanceId, { inStorage: false });
+      }
+      const lv = getBeastLevel(general);
+      await db.profile.update('default_player', {
+        tacticalStance: 'general',
+        activeBeastId: general.instanceId
+      });
+      setSelectedBeastId(general.instanceId);
+      showToast(
+        `⚔️ 已切換【主力大將決戰陣】！由王牌「${general.nickname} (Lv.${lv})」親自出馬：享最高技能加成與 +25% 統帥金幣加碼！（注意：答對率過低大將會受創！）`
+      );
     }
   };
 
@@ -323,7 +397,34 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     );
   };
 
-  // 餵食靈氣牧草 (+15 EXP + 牧草飛入與光點動畫 + 每級升級成果 Modal)
+  // 將選中奇獸移入奇獸倉庫
+  const handleStoreBeast = async (beast: BeastInstance) => {
+    if (hatchedBeasts.length <= 1) {
+      sound.playWrong();
+      showToast('⚠️ 牧場草地上至少要保留 1 隻奇獸陪你喔！');
+      return;
+    }
+    sound.playClick();
+    await db.beasts.update(beast.instanceId, { inStorage: true });
+    const updates: Partial<PlayerProfile> = {};
+    if (profile.activeBeastId === beast.instanceId) {
+      updates.activeBeastId = null;
+    }
+    if (
+      Array.isArray(profile.battleDeckIds) &&
+      profile.battleDeckIds.includes(beast.instanceId)
+    ) {
+      updates.battleDeckIds = profile.battleDeckIds.filter(
+        (id) => id !== beast.instanceId
+      );
+    }
+    if (Object.keys(updates).length > 0) {
+      await db.profile.update('default_player', updates);
+    }
+    showToast(`📦 已將「${beast.nickname}」安全收納至奇獸倉庫！`);
+  };
+
+  // 餵食靈氣牧草 (+15 EXP + 循序漸進突破檢定 + 牧草飛入動畫 + 升級成果 Modal)
   const handleFeedBeast = async (beast: BeastInstance) => {
     const species = speciesMap.get(beast.speciesId);
     if (!species) return;
@@ -335,8 +436,22 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
       return;
     }
 
+    const upgradeReq = getBeastUpgradeRequirement({
+      beast,
+      species,
+      allBeasts: beasts,
+      profile,
+      masteredCount
+    });
+
+    if (!upgradeReq.canFeed && upgradeReq.lockReason) {
+      sound.playWrong();
+      showToast(upgradeReq.lockReason);
+      return;
+    }
+
     if (profile.forageCount <= 0) {
-      showToast('靈氣牧草不足！快去挑戰字音字形關卡收集牧草吧！');
+      showToast('靈氣牧草不足！快去挑戰字音字形關卡或前往金幣補給站收集牧草吧！');
       return;
     }
 
@@ -369,8 +484,8 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     }
   };
 
-  // 神秘抽蛋屋抽蛋
-  const handleDrawEgg = async (type: 'coin' | 'gem') => {
+  // 神秘抽蛋屋抽蛋（含智慧防重複權重 & 新世代焦點蛋池）
+  const handleDrawEgg = async (type: 'coin' | 'gem' | 'new_gen_coin') => {
     if (eggs.length >= 3) {
       showToast('孵蛋巢位已滿（最多 3 顆）！請先答題孵化現有的神秘蛋喔！');
       return;
@@ -384,9 +499,21 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
       await db.profile.update('default_player', {
         coins: profile.coins - 100
       });
+    } else if (type === 'new_gen_coin') {
+      if (masteredCount < 150) {
+        showToast('🔒 需累計熟悉通過 150 題才能解鎖「新世代專屬蛋池」喔！');
+        return;
+      }
+      if (profile.coins < 180) {
+        showToast('金幣不足 180 枚！去挑戰一局字音字形賺金幣吧！');
+        return;
+      }
+      await db.profile.update('default_player', {
+        coins: profile.coins - 180
+      });
     } else {
       if (profile.gems < 12) {
-        showToast('璀璨寶石不足 12 顆！高連擊或除魔特訓可獲得寶石喔！');
+        showToast('璀璨寶石不足 12 顆！高連擊或金幣補給站可獲得寶石喔！');
         return;
       }
       await db.profile.update('default_player', {
@@ -394,21 +521,50 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
       });
     }
 
-    // 依機率抽取稀有度
+    // 依機率抽取稀有度，並使用智慧防重複演算法優先抽出未收集與新世代奇獸
     const roll = Math.random();
-    let targetRarity: 'N' | 'R' | 'SR' | 'SSR' = 'N';
+    let targetRarity: Rarity = 'N';
     if (type === 'coin') {
-      if (roll < 0.05) targetRarity = 'SR';
-      else if (roll < 0.35) targetRarity = 'R';
+      if (roll < 0.06) targetRarity = 'SR';
+      else if (roll < 0.38) targetRarity = 'R';
       else targetRarity = 'N';
+    } else if (type === 'new_gen_coin') {
+      if (roll < 0.12) targetRarity = 'SSR';
+      else if (roll < 0.48) targetRarity = 'SR';
+      else targetRarity = 'R';
     } else {
-      if (roll < 0.28) targetRarity = 'SSR';
-      else if (roll < 0.72) targetRarity = 'SR';
+      if (roll < 0.3) targetRarity = 'SSR';
+      else if (roll < 0.75) targetRarity = 'SR';
       else targetRarity = 'R';
     }
 
-    const candidates = BEAST_SPECIES_LIST.filter((s) => s.rarity === targetRarity);
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)] || BEAST_SPECIES_LIST[0];
+    let chosen: BeastSpecies;
+    if (type === 'new_gen_coin') {
+      // 100% 只從第 2 世代以上已解鎖的新世代奇獸中抽取，且未收集品種 5 倍權重！
+      const newGenPool = getUnlockedSpeciesPool(masteredCount).filter(
+        (s) => (s.generation ?? 1) >= 2
+      );
+      chosen = pickSmartEggSpecies({
+        targetRarity,
+        masteredCount,
+        ownedBeasts: beasts,
+        preferLatestGen: true
+      });
+      if ((chosen.generation ?? 1) < 2 && newGenPool.length > 0) {
+        const unownedNew = newGenPool.filter(
+          (s) => !beasts.some((b) => b.speciesId === s.speciesId)
+        );
+        const pool = unownedNew.length > 0 ? unownedNew : newGenPool;
+        chosen = pool[Math.floor(Math.random() * pool.length)];
+      }
+    } else {
+      chosen = pickSmartEggSpecies({
+        targetRarity,
+        masteredCount,
+        ownedBeasts: beasts,
+        preferLatestGen: true
+      });
+    }
 
     const newEgg: BeastInstance = {
       instanceId: `beast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -425,7 +581,8 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
 
     await db.beasts.put(newEgg);
     sound.playFanfare();
-    showToast(`🥚 獲得【${chosen.rarity}】${chosen.eggName}！已放入孵蛋巢位！`);
+    const genTag = (chosen.generation ?? 1) >= 2 ? `（第${chosen.generation}世代新奇獸！）` : '';
+    showToast(`🥚 獲得【${chosen.rarity}】${chosen.eggName}${genTag}！已放入孵蛋巢位！`);
     setShowGachaModal(false);
   };
 
@@ -606,6 +763,107 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
         </motion.div>
       )}
 
+      {/* 兵法出征策略切換面板：🛡️ 斥候小兵探路陣 vs ⚔️ 主力大將決戰陣 */}
+      <div className="bg-white/95 rounded-3xl p-4 shadow-md border-2 border-indigo-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-3">
+          <div
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm shrink-0 ${
+              profile.tacticalStance === 'scout'
+                ? 'bg-sky-100 text-sky-700 border-2 border-sky-300'
+                : 'bg-amber-100 text-amber-800 border-2 border-amber-300'
+            }`}
+          >
+            {activeCompanion?.stageInfo.emoji ||
+              (profile.tacticalStance === 'scout' ? '🛡️' : '⚔️')}
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-slate-900 text-amber-300">
+                🚩 出征兵法策略
+              </span>
+              <h3 className="font-extrabold text-sm md:text-base text-slate-800">
+                {profile.tacticalStance === 'scout'
+                  ? '🛡️ 斥候小兵探路陣（先派小兵試水溫・主力大將零風險）'
+                  : '⚔️ 主力大將決戰陣（王牌親征高加成・戰敗有戰損風險）'}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-600 font-semibold mt-0.5">
+              {activeCompanion ? (
+                profile.tacticalStance === 'scout' ? (
+                  <>
+                    當前先鋒斥候：
+                    <strong className="text-sky-700">
+                      【{activeCompanion.beast.rarity}】{activeCompanion.stageInfo.name} (Lv.
+                      {activeCompanion.level})
+                    </strong>{' '}
+                    — 就算遇到陌生難題失誤，後方 Lv.6 大將也完全不會掉級或被消滅；若探路通關，小兵直接獲{' '}
+                    <strong className="text-emerald-700">+15 EXP 實戰晉升經驗</strong>！
+                  </>
+                ) : (
+                  <>
+                    當前領軍大將：
+                    <strong className="text-amber-700">
+                      【{activeCompanion.beast.rarity}】{activeCompanion.stageInfo.name} (Lv.
+                      {activeCompanion.level})
+                    </strong>{' '}
+                    — 享有字音 +{activeCompanion.perks.extraSeconds}秒、護盾{' '}
+                    {activeCompanion.perks.comboShields}次，且通關額外享{' '}
+                    <strong className="text-amber-700">+25% 統帥金幣與牧草加碼</strong>
+                    ！（⚠️ 答對率 &lt;50% 大將降級、&lt;20% 陣亡消滅）
+                  </>
+                )
+              ) : (
+                '請選擇要派「小兵探路」或「大將出馬」！'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleSwitchTacticalStance('scout')}
+            className={`px-3.5 py-2.5 rounded-2xl font-extrabold text-xs flex flex-col items-center justify-center gap-0.5 border-2 transition active:scale-95 ${
+              profile.tacticalStance === 'scout'
+                ? 'bg-sky-600 text-white border-sky-400 shadow-md'
+                : 'bg-sky-50 hover:bg-sky-100 text-sky-900 border-sky-200'
+            }`}
+          >
+            <span className="text-sm font-black flex items-center gap-1">
+              🛡️ 派小兵探路
+            </span>
+            <span
+              className={`text-[10px] ${
+                profile.tacticalStance === 'scout' ? 'text-sky-100' : 'text-sky-700'
+              }`}
+            >
+              保護大將＋小兵賺EXP
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSwitchTacticalStance('general')}
+            className={`px-3.5 py-2.5 rounded-2xl font-extrabold text-xs flex flex-col items-center justify-center gap-0.5 border-2 transition active:scale-95 ${
+              profile.tacticalStance !== 'scout'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-300 shadow-md'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+            }`}
+          >
+            <span className="text-sm font-black flex items-center gap-1">
+              ⚔️ 派大將出馬
+            </span>
+            <span
+              className={`text-[10px] ${
+                profile.tacticalStance !== 'scout' ? 'text-amber-100' : 'text-amber-700'
+              }`}
+            >
+              最強護盾＋統帥加碼25%
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* 核心行動大按鈕區（智慧闖關 + 字形雙倍專場 / 街機魔王對戰台 / 錯題本 / 抽蛋屋 / 圖鑑） */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
         {/* 日常練功區：含「智慧均衡闖關」與「字形手寫專場（雙倍獎勵）」與「字音極速專場」 */}
@@ -709,7 +967,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
           </span>
         </button>
 
-        <div className="md:col-span-2 grid grid-cols-3 md:grid-cols-1 gap-1.5">
+        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-1 gap-1.5">
           <button
             type="button"
             onClick={() => {
@@ -719,7 +977,9 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
             className="p-2 rounded-2xl bg-white hover:bg-purple-50/70 border-2 border-purple-200 shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95"
           >
             <Gift className="w-4 h-4 text-purple-600 shrink-0" />
-            <span className="font-extrabold text-slate-800 text-xs">神秘抽蛋屋</span>
+            <span className="font-extrabold text-slate-800 text-xs">
+              抽蛋屋 (G1~G{currentMaxGen})
+            </span>
           </button>
 
           <button
@@ -735,12 +995,28 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
             type="button"
             onClick={() => {
               sound.playClick();
+              setShowStorageModal(true);
+            }}
+            className="p-2 rounded-2xl bg-indigo-50 hover:bg-indigo-100/80 border-2 border-indigo-200 shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95"
+          >
+            <Archive className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span className="font-extrabold text-indigo-950 text-xs">
+              奇獸倉庫 ({storedBeasts.length})
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              sound.playClick();
               setShowBestiaryModal(true);
             }}
             className="p-2 rounded-2xl bg-white hover:bg-sky-50/70 border-2 border-sky-200 shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95"
           >
             <Crown className="w-4 h-4 text-sky-600 shrink-0" />
-            <span className="font-extrabold text-slate-800 text-xs">神獸卡匣圖鑑</span>
+            <span className="font-extrabold text-slate-800 text-xs">
+              全圖鑑 ({unlockedSpeciesCount}/{BEAST_SPECIES_LIST.length})
+            </span>
           </button>
         </div>
       </div>
@@ -873,11 +1149,22 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
         <div className="lg:col-span-7 bg-gradient-to-b from-emerald-100/80 via-emerald-50 to-teal-50 rounded-3xl p-5 shadow-md border-2 border-emerald-200 flex flex-col justify-between">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Sprout className="w-5 h-5 text-emerald-700" />
                 <h3 className="font-extrabold text-lg text-emerald-950">
-                  我的神獸卡匣收藏 ({hatchedBeasts.length} 張卡匣)
+                  我的神獸卡匣收藏 ({hatchedBeasts.length} 張上場)
                 </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playClick();
+                    setShowStorageModal(true);
+                  }}
+                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-sm flex items-center gap-1 transition active:scale-95"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  📦 奇獸倉庫 ({storedBeasts.length} 隻保管中)
+                </button>
               </div>
               {maxAura.maxedCount > 0 ? (
                 <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-extrabold">
@@ -1123,6 +1410,13 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                   expNeeded > 0
                     ? Math.min(100, Math.round((selectedBeast.currentExp / expNeeded) * 100))
                     : 100;
+                const upgradeReq = getBeastUpgradeRequirement({
+                  beast: selectedBeast,
+                  species: sp,
+                  allBeasts: beasts,
+                  profile,
+                  masteredCount
+                });
                 const isActivePartner =
                   activeCompanion?.beast.instanceId === selectedBeast.instanceId;
                 const activeFx =
@@ -1346,23 +1640,60 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                         </div>
                       </div>
 
-                      {/* 設為出戰夥伴按鈕 */}
-                      {isActivePartner ? (
-                        <span className="px-3.5 py-2 rounded-xl bg-indigo-100 border border-indigo-300 text-indigo-800 font-extrabold text-xs flex items-center gap-1.5 shrink-0">
-                          <Star className="w-4 h-4 fill-indigo-500 text-indigo-600" />
-                          目前出戰夥伴
-                        </span>
-                      ) : (
+                      {/* 設為出戰夥伴 & 移入倉庫按鈕 */}
+                      <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
+                        {isActivePartner ? (
+                          <span className="px-3.5 py-2 rounded-xl bg-indigo-100 border border-indigo-300 text-indigo-800 font-extrabold text-xs flex items-center gap-1.5 shrink-0">
+                            <Star className="w-4 h-4 fill-indigo-500 text-indigo-600" />
+                            目前出戰夥伴
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSetActiveCompanion(selectedBeast.instanceId)}
+                            className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition"
+                          >
+                            <Swords className="w-4 h-4" />
+                            設為出戰夥伴
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => handleSetActiveCompanion(selectedBeast.instanceId)}
-                          className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition"
+                          onClick={() => handleStoreBeast(selectedBeast)}
+                          title="把暫不升級或重複的奇獸收進倉庫保護"
+                          className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-indigo-100 text-slate-700 hover:text-indigo-800 border border-slate-200 font-extrabold text-xs flex items-center justify-center gap-1 shrink-0 active:scale-95 transition"
                         >
-                          <Swords className="w-4 h-4" />
-                          設為出戰夥伴
+                          <Archive className="w-3.5 h-3.5" />
+                          移入倉庫
                         </button>
-                      )}
+                      </div>
                     </div>
+
+                    {/* 循序漸進升級突破條件提示 */}
+                    {level < MAX_BEAST_LEVEL &&
+                      (upgradeReq.requiredMasteredCount > 0 ||
+                        upgradeReq.requiredTotalCorrect > 0) && (
+                        <div
+                          className={`px-3 py-2 rounded-xl border text-xs font-extrabold flex items-center justify-between flex-wrap gap-1 ${
+                            upgradeReq.canFeed
+                              ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                              : 'bg-amber-50 border-amber-300 text-amber-950'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {upgradeReq.canFeed ? (
+                              <span>✅</span>
+                            ) : (
+                              <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            )}
+                            <span>
+                              {upgradeReq.lockReason
+                                ? upgradeReq.lockReason
+                                : `升至 Lv.${upgradeReq.targetLevel} 突破條件：累計通過 ${upgradeReq.requiredMasteredCount} 題（目前 ${masteredCount} 題）、累計答對 ${upgradeReq.requiredTotalCorrect} 題（目前 ${profile.totalCorrect} 題）— 已達標！`}
+                            </span>
+                          </span>
+                        </div>
+                      )}
 
                     {/* 出戰夥伴技能加成一覽 */}
                     <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 flex flex-col gap-2">
@@ -1500,43 +1831,81 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                 </button>
               </div>
 
-              <p className="text-sm text-slate-600 mb-4">
-                目前孵蛋巢位：{eggs.length} / 3 顆（抽出的神秘蛋會直接放入巢位，透過答對字音字形題目孵化！）
+              <p className="text-sm text-slate-600 mb-2">
+                目前孵蛋巢位：{eggs.length} / 3 顆 ｜ 已解鎖至{' '}
+                <strong className="text-indigo-700">
+                  {GENERATION_META[currentMaxGen]?.title || `第 ${currentMaxGen} 世代`}
+                </strong>
+                （共 {unlockedSpeciesCount} 種奇獸可抽出，智慧防重複系統將優先抽出尚未收錄的新奇獸！）
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 flex flex-col justify-between items-center text-center">
                   <div>
-                    <div className="text-5xl my-2">🥚</div>
-                    <h4 className="font-extrabold text-amber-950 text-base">草原祈願蛋池</h4>
+                    <div className="text-4xl my-1.5">🥚</div>
+                    <h4 className="font-extrabold text-amber-950 text-sm">草原祈願蛋池</h4>
                     <p className="text-xs text-amber-800 mt-1">
-                      高機率獲得 N / R 級元素神獸蛋，小機率出現 SR 級！
+                      從已解鎖世代召喚 N / R 級神獸蛋，小機率出現 SR 級（未收錄品種 4.5 倍UP）！
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleDrawEgg('coin')}
-                    className="mt-4 w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-extrabold text-sm shadow flex items-center justify-center gap-1.5"
+                    className="mt-3 w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-extrabold text-xs shadow flex items-center justify-center gap-1"
                   >
-                    <Coins className="w-4 h-4" />
+                    <Coins className="w-3.5 h-3.5" />
                     100 金幣召喚
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-sky-50 border-2 border-sky-300 flex flex-col justify-between items-center text-center relative">
+                  <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-sky-600 text-white text-[10px] font-black shadow">
+                    150題解鎖・新奇獸專池
+                  </span>
+                  <div>
+                    <div className="text-4xl my-1.5">🌟</div>
+                    <h4 className="font-extrabold text-sky-950 text-sm">新世代焦點蛋池</h4>
+                    <p className="text-xs text-sky-800 mt-1">
+                      100% 保證抽出【第 2～{Math.max(2, currentMaxGen)} 世代】全新階段奇獸（保底 R～SSR）！
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDrawEgg('new_gen_coin')}
+                    className={`mt-3 w-full py-2.5 rounded-xl font-extrabold text-xs shadow flex items-center justify-center gap-1 ${
+                      masteredCount >= 150
+                        ? 'bg-sky-600 hover:bg-sky-500 text-white'
+                        : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    {masteredCount >= 150 ? (
+                      <>
+                        <Coins className="w-3.5 h-3.5" />
+                        180 金幣召喚新世代
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        通過 150 題解鎖
+                      </>
+                    )}
                   </button>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-purple-50 border-2 border-purple-300 flex flex-col justify-between items-center text-center">
                   <div>
-                    <div className="text-5xl my-2">🔮</div>
-                    <h4 className="font-extrabold text-purple-950 text-base">星穹聖獸蛋池</h4>
+                    <div className="text-4xl my-1.5">🔮</div>
+                    <h4 className="font-extrabold text-purple-950 text-sm">星穹聖獸蛋池</h4>
                     <p className="text-xs text-purple-800 mt-1">
-                      保底 R 級以上！極高機率召喚 SR 與 SSR 傳說聖獸蛋！
+                      保底 R 級以上！極高機率召喚已解鎖世代的 SR 與 SSR 傳說聖獸蛋！
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleDrawEgg('gem')}
-                    className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow flex items-center justify-center gap-1.5"
+                    className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow flex items-center justify-center gap-1"
                   >
-                    <Gem className="w-4 h-4" />
+                    <Gem className="w-3.5 h-3.5" />
                     12 寶石召喚
                   </button>
                 </div>
@@ -1558,11 +1927,23 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 金幣補給站 Modal（購買孵蛋加速券 / 璀璨寶石） */}
+      {/* 奇獸皇家倉庫 Modal */}
+      <AnimatePresence>
+        {showStorageModal && (
+          <BeastStorageModal
+            profile={profile}
+            beasts={beasts}
+            onClose={() => setShowStorageModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 金幣補給站 Modal（購買靈氣牧草 / 孵蛋加速券 / 璀璨寶石） */}
       <AnimatePresence>
         {showShopModal && (
           <CoinShopModal
             profile={profile}
+            masteredCount={masteredCount}
             initialNotice={shopNotice}
             onClose={() => {
               setShowShopModal(false);
@@ -1583,11 +1964,16 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
               className="bg-white rounded-3xl max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl border-2 border-sky-200 overflow-hidden"
             >
               <div className="p-5 bg-sky-50 border-b border-sky-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Crown className="w-6 h-6 text-sky-600" />
-                  <h3 className="text-xl font-extrabold text-slate-800">
-                    神獸卡匣全圖鑑（共 12 種三段升星：★1 ➔ ★3 ➔ ★5）
-                  </h3>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-6 h-6 text-sky-600" />
+                    <h3 className="text-xl font-extrabold text-slate-800">
+                      神獸卡匣全圖鑑（五大世代共 {BEAST_SPECIES_LIST.length} 種三段升星：★1 ➔ ★3 ➔ ★5）
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-600 font-semibold mt-1">
+                    每當熟悉通過題數突破 150 題、250 題、500 題、750 題與 1000 題，就會自動解鎖新世代奇獸進入抽蛋池與過關掉蛋！
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -1604,6 +1990,9 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                     (b) => b.speciesId === sp.speciesId && b.stage !== 'egg'
                   );
                   const isUnlocked = ownedInstances.length > 0;
+                  const reqMastered = sp.unlockMasteredCount ?? 0;
+                  const isPoolUnlocked = masteredCount >= reqMastered;
+                  const gen = sp.generation ?? 1;
                   const bossElem = BOSS_ELEMENT_META[sp.element];
 
                   return (
@@ -1612,10 +2001,12 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                       className={`p-4 rounded-2xl border-2 ${
                         isUnlocked
                           ? 'bg-white border-emerald-200 shadow-sm'
+                          : isPoolUnlocked
+                          ? 'bg-sky-50/40 border-sky-200'
                           : 'bg-slate-50 border-slate-200 opacity-75'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-2 gap-1 flex-wrap">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
                             className={`px-2 py-0.5 rounded-full text-xs font-extrabold text-white ${
@@ -1628,7 +2019,7 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                                 : 'bg-emerald-600'
                             }`}
                           >
-                            {sp.rarity}
+                            {sp.rarity}・第{gen}世代
                           </span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${bossElem.badgeClass}`}>
                             {bossElem.emoji}{bossElem.label}
@@ -1637,8 +2028,20 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                             {sp.eggName}（{sp.eggStepsRequired} 題）
                           </span>
                         </div>
-                        <span className="text-xs font-bold text-emerald-700">
-                          {isUnlocked ? '✅ 已收錄' : '🔒 未孵化'}
+                        <span
+                          className={`text-xs font-extrabold ${
+                            isUnlocked
+                              ? 'text-emerald-700'
+                              : isPoolUnlocked
+                              ? 'text-sky-700'
+                              : 'text-slate-500'
+                          }`}
+                        >
+                          {isUnlocked
+                            ? `✅ 已收錄 (${ownedInstances.length}隻)`
+                            : isPoolUnlocked
+                            ? '🥚 已解鎖可抽取'
+                            : `🔒 通過 ${reqMastered} 題解鎖`}
                         </span>
                       </div>
 

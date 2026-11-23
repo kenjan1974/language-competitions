@@ -318,7 +318,7 @@ export async function generateStandardQuiz(
   };
 }
 
-/** 產生「魔王機台討伐戰」10 題挑戰（6 題字音 + 4 題字形） */
+/** 產生「魔王機台討伐戰」10 題挑戰（依魔王專屬主題特性加權抽取考題！） */
 export async function generateBossBattleQuiz(boss: BossEnemy): Promise<QuizSessionData> {
   const [allQuestions, allProgress] = await Promise.all([
     db.questions.toArray(),
@@ -329,11 +329,72 @@ export async function generateBossBattleQuiz(boss: BossEnemy): Promise<QuizSessi
     allProgress.map((p) => [p.questionId, p])
   );
 
-  const pronPool = allQuestions.filter((q) => q.type === 'pronunciation');
-  const charPool = allQuestions.filter((q) => q.type === 'character');
+  const pronPoolAll = allQuestions.filter((q) => q.type === 'pronunciation');
+  const charPoolAll = allQuestions.filter((q) => q.type === 'character');
 
-  const pronunciationQuestions = pickWeightedQuestions(pronPool, progressMap, 6);
-  const characterQuestions = pickWeightedQuestions(charPool, progressMap, 4);
+  // 統計題庫中「一字多音」的目標字集合
+  const charZhuyinMap = new Map<string, Set<string>>();
+  for (const q of pronPoolAll) {
+    const s = charZhuyinMap.get(q.targetChar) ?? new Set<string>();
+    s.add(q.targetZhuyin);
+    charZhuyinMap.set(q.targetChar, s);
+  }
+
+  let themedPronPool = pronPoolAll;
+  let themedCharPool = charPoolAll;
+  let pronCount = 6;
+  let charCount = 4;
+
+  if (boss.stageOrder === 1) {
+    // 第 1 關（混淆咕咕怪）：專考平翹舌聲母 ㄓㄔㄕ/ㄗㄘㄙ
+    const filtered = pronPoolAll.filter((q) => /[ㄓㄔㄕㄗㄘㄙ]/.test(q.targetZhuyin));
+    if (filtered.length >= 20) themedPronPool = filtered;
+  } else if (boss.stageOrder === 2 || boss.stageOrder === 9) {
+    // 第 2 關（倒筆順巨鱷）& 第 9 關（青銅窮奇）：字形加重試煉（5 字音 + 5 字形）
+    pronCount = 5;
+    charCount = 5;
+  } else if (boss.stageOrder === 3 || boss.stageOrder === 10) {
+    // 第 3 關（多音字赤焰鬼王）& 第 10 關（蝕月天狗）：專考一字多音高頻陷阱
+    const polyphonic = pronPoolAll.filter(
+      (q) => (charZhuyinMap.get(q.targetChar)?.size ?? 1) >= 2 || q.frequency >= 2
+    );
+    if (polyphonic.length >= 20) themedPronPool = polyphonic;
+  } else if (boss.stageOrder === 4) {
+    // 第 4 關（形近字魔龍）：優先抽有形近字提醒或高頻字形題
+    const confusableChars = charPoolAll.filter(
+      (q) =>
+        q.frequency >= 2 ||
+        (q.strokeHint && /勿|不可|非|右作|左作/.test(q.strokeHint))
+    );
+    if (confusableChars.length >= 15) themedCharPool = confusableChars;
+    pronCount = 5;
+    charCount = 5;
+  } else if (boss.stageOrder === 7) {
+    // 第 7 關（九頭相柳）：專考鼻音韻母 ㄢㄤ/ㄣㄥ
+    const nasal = pronPoolAll.filter((q) => /[ㄢㄤㄣㄥ]/.test(q.targetZhuyin));
+    if (nasal.length >= 20) themedPronPool = nasal;
+  } else if (boss.stageOrder >= 8) {
+    // 高階魔王：優先抽歷屆高頻必考題 (frequency >= 2) 或四字成語
+    const highPron = pronPoolAll.filter(
+      (q) => q.frequency >= 2 || q.fullWord.length >= 4
+    );
+    const highChar = charPoolAll.filter(
+      (q) => q.frequency >= 2 || q.fullWord.length >= 4
+    );
+    if (highPron.length >= 25) themedPronPool = highPron;
+    if (highChar.length >= 25) themedCharPool = highChar;
+  }
+
+  const pronunciationQuestions = pickWeightedQuestions(
+    themedPronPool,
+    progressMap,
+    pronCount
+  );
+  const characterQuestions = pickWeightedQuestions(
+    themedCharPool,
+    progressMap,
+    charCount
+  );
 
   return {
     mode: 'boss_battle',
@@ -484,6 +545,7 @@ export async function settleQuizRewards(params: {
   companionName?: string;
   globalCoinBonusPct?: number;
   participatingDeck?: BeastInstance[];
+  isOverLevelTrial?: boolean;
 }): Promise<QuizRewardSummary> {
   const {
     mode,
@@ -498,7 +560,8 @@ export async function settleQuizRewards(params: {
     companionPerks,
     companionName,
     globalCoinBonusPct = 0,
-    participatingDeck
+    participatingDeck,
+    isOverLevelTrial = false
   } = params;
 
   const safeTotal = Math.max(1, totalQuestions);
@@ -715,7 +778,8 @@ export async function settleQuizRewards(params: {
   let nextActiveBeastId = profile?.activeBeastId;
   let nextBattleDeckIds = profile?.battleDeckIds;
 
-  if (!passed && accuracy < 50) {
+  // 若為「越級試打高階魔王 (isOverLevelTrial === true)」，戰敗免受降級與重傷懲罰，鼓勵小朋友大膽試探魔王護盾！
+  if (!passed && accuracy < 50 && !isOverLevelTrial) {
     const activeRanchBeasts = allBeasts.filter(
       (b) => b.stage !== 'egg' && !b.inStorage
     );

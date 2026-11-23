@@ -27,6 +27,7 @@ import { BEAST_SPECIES_LIST, getBestiaryBondsSummary } from './data/beasts';
 import {
   ELEMENT_META as BOSS_ELEMENT_META,
   calculateDeckVsBossPower,
+  getEffectiveBossRequiredCount,
   getResolvedBattleDeck
 } from './data/bosses';
 import {
@@ -82,6 +83,9 @@ export default function App() {
   // 街機魔王對戰即時狀態
   const [activeDeck, setActiveDeck] = useState<BeastInstance[]>([]);
   const [bossCurrentHp, setBossCurrentHp] = useState<number>(0);
+  const [playerCurrentHp, setPlayerCurrentHp] = useState<number>(1000);
+  const [playerMaxHp, setPlayerMaxHp] = useState<number>(1000);
+  const [isOverLevelTrial, setIsOverLevelTrial] = useState<boolean>(false);
   const [lastAttackLog, setLastAttackLog] = useState<{
     id: number;
     attackerName: string;
@@ -89,6 +93,7 @@ export default function App() {
     damage: number;
     isSuperEffective: boolean;
     isBossCounter?: boolean;
+    shieldReduced?: boolean;
   } | null>(null);
 
   // 使用 Ref 同步最新計分與魔王血量，避免最後一題同步結算時讀取到舊的 state
@@ -99,6 +104,7 @@ export default function App() {
   const eggStepsRef = useRef(0);
   const shieldsRef = useRef(0);
   const bossHpRef = useRef(0);
+  const playerHpRef = useRef(1000);
   const turnCounterRef = useRef(0);
   const shieldNoticeTimerRef = useRef<number | null>(null);
 
@@ -267,9 +273,24 @@ export default function App() {
     const resolvedDeck =
       deck.length > 0 ? deck : getResolvedBattleDeck(beasts, profile.battleDeckIds);
 
+    const { effectivePower } = calculateDeckVsBossPower(
+      resolvedDeck,
+      boss,
+      speciesMap,
+      bestiaryBonds.totalBonusCpPct
+    );
+    const reqCount = getEffectiveBossRequiredCount(boss, questions.length);
+    const overLevel =
+      masteredCount < reqCount || effectivePower < boss.requiredCombatPower * 0.85;
+    const initPlayerHp = Math.max(1200, Math.round(effectivePower * 2.2));
+
     setQuizSession(session);
     setActiveDeck(resolvedDeck);
     resetSessionCounters(boss.maxHp);
+    setIsOverLevelTrial(overLevel);
+    setPlayerMaxHp(initPlayerHp);
+    setPlayerCurrentHp(initPlayerHp);
+    playerHpRef.current = initPlayerHp;
 
     if (session.pronunciationQuestions.length > 0) {
       setView('quiz_pronunciation');
@@ -278,7 +299,7 @@ export default function App() {
     }
   };
 
-  // 計算單題作答時，出戰神獸卡匣對魔王造成的傷害
+  // 計算單題作答時，出戰神獸卡匣對魔王造成的傷害（含越級題庫護盾減傷與魔王反擊扣血）
   const applyBossBattleTurn = (
     isCorrect: boolean,
     isCharacterStage: boolean,
@@ -292,12 +313,33 @@ export default function App() {
     const nextTurn = turnCounterRef.current + 1;
     turnCounterRef.current = nextTurn;
 
+    const { effectivePower } = calculateDeckVsBossPower(
+      activeDeck,
+      boss,
+      speciesMap,
+      bestiaryBonds.totalBonusCpPct
+    );
+    const reqCount = getEffectiveBossRequiredCount(boss, questions.length);
+    const questionRatio =
+      reqCount > 0 ? Math.min(1, masteredCount / reqCount) : 1;
+    const powerRatio = effectivePower / Math.max(1, boss.requiredCombatPower);
+
     if (!isCorrect) {
+      // 魔王反擊扣除我方小隊護盾 HP（若越級挑戰，魔王反擊更痛，讓孩子體驗需要升級卡匣的刺激感）
+      const counterScale = powerRatio < 0.85 ? 0.34 : 0.22;
+      const bossDamage = Math.max(
+        180,
+        Math.round(playerMaxHp * counterScale)
+      );
+      const nextPlayerHp = Math.max(0, playerHpRef.current - bossDamage);
+      playerHpRef.current = nextPlayerHp;
+      setPlayerCurrentHp(nextPlayerHp);
+
       setLastAttackLog({
         id: Date.now(),
         attackerName: boss.name,
-        skillName: '魔王反擊咆哮',
-        damage: 0,
+        skillName: '魔王破陣反擊',
+        damage: bossDamage,
         isSuperEffective: false,
         isBossCounter: true
       });
@@ -316,18 +358,15 @@ export default function App() {
         : null;
     const elemMeta = sp ? BOSS_ELEMENT_META[sp.element] : BOSS_ELEMENT_META.fire;
 
-    const { effectivePower } = calculateDeckVsBossPower(
-      activeDeck,
-      boss,
-      speciesMap,
-      bestiaryBonds.totalBonusCpPct
-    );
+    // 若卡組戰力或題庫階段未達標，受到魔王結界護盾減傷
+    const rawShieldFactor = Math.min(1.25, powerRatio) * (0.4 + 0.6 * questionRatio);
+    const shieldPenalty =
+      powerRatio < 0.9 || questionRatio < 1
+        ? Math.max(0.22, rawShieldFactor * 0.72)
+        : rawShieldFactor;
+    const shieldReduced = powerRatio < 0.9 || questionRatio < 1;
 
-    // 若卡組戰力達標，約答對 8~9 題可擊破魔王；若戰力不足則受魔王護盾減傷
-    const powerRatio = effectivePower / Math.max(1, boss.requiredCombatPower);
-    const shieldPenalty = powerRatio < 0.85 ? powerRatio * 0.75 : powerRatio;
-
-    const baseHit = Math.round((boss.maxHp / 8.2) * shieldPenalty);
+    const baseHit = Math.round((boss.maxHp / 8.0) * shieldPenalty);
     const stageMultiplier = isCharacterStage ? 1.25 : 1.0; // 手寫字形題傷害加成 1.25x
     const comboMultiplier = 1 + Math.min(5, nextCombo) * 0.06;
     const isSuperEffective = sp?.element === boss.weaknessElement;
@@ -345,7 +384,8 @@ export default function App() {
       attackerName: attackerStageInfo?.name || attacker?.nickname || '守護神獸',
       skillName: elemMeta.skillName,
       damage: finalDamage,
-      isSuperEffective
+      isSuperEffective,
+      shieldReduced
     });
   };
 
@@ -448,6 +488,8 @@ export default function App() {
       companionPerks: activeCompanion?.perks ?? null,
       companionName: activeCompanion?.stageInfo.name,
       globalCoinBonusPct: maxAura.globalCoinBonusPct,
+      isOverLevelTrial:
+        quizSession.mode === 'boss_battle' ? isOverLevelTrial : false,
       participatingDeck:
         activeDeck.length > 0
           ? activeDeck
@@ -534,6 +576,9 @@ export default function App() {
           <BossBattleBanner
             boss={quizSession.boss}
             bossCurrentHp={bossCurrentHp}
+            playerCurrentHp={playerCurrentHp}
+            playerMaxHp={playerMaxHp}
+            isOverLevelTrial={isOverLevelTrial}
             deck={activeDeck}
             speciesMap={speciesMap}
             lastAttackLog={lastAttackLog}

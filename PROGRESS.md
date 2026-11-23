@@ -1,9 +1,9 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：**Phase 10、Phase 11、Phase 12 已完成**（重傷休養安全機制、10大世代62種奇獸、世代戰力階梯、12階段里程碑、十大世代圖鑑羈絆加成、重複卡星魂轉化與100%未收錄保底許願池），準備執行 **Phase 13（街機魔王戰 2.0：12 大主題魔王 ＋ 越級挑戰護盾壓制 ＋ 玩家隊伍 HP 與主題題庫）**
+- **目前階段**：**Phase 10、Phase 11、Phase 12、Phase 13 已完成**（重傷休養安全機制、10大世代62種奇獸、世代戰力階梯、12階段里程碑、十大世代圖鑑羈絆加成、重複卡星魂轉化與許願池、12大主題街機魔王與越級挑戰護盾＋我方小隊HP），準備執行 **Phase 14（教育部辭典對接與「字首字根拆解（形符＋聲符）」題庫知識擴充）**
 - **最後更新時間**：2026-11-23
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 13` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 14` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
 
 ---
 
@@ -49,13 +49,13 @@
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 13: 街機魔王戰 2.0（12 大主題魔王 ＋ 越級挑戰護盾壓制 ＋ 玩家隊伍 HP 與主題題庫）
-- [ ] **Task 13.1: 擴充為 12 大階梯魔王並開放「越級挑戰體驗護盾壓制」**
-  - 修改 `src/data/bosses.ts` & `src/components/ranch/BossArenaModal.tsx`：將魔王從 7 關擴充為 12 關（對應 15 題 ～ 3,457 題，要求戰力 120 CP ～ 7,500 CP）。
-  - 開放已擊敗前一關魔王的玩家可點擊「⚠️ 越級試打」下一關魔王（未達題數或戰力時魔王擁有減傷護盾，且越級試打失敗不觸發降級/重傷，並給予明確的養成指引）。
-- [ ] **Task 13.2: 實作魔王戰「玩家隊伍 HP 血條」與「魔王專屬主題抽題」**
+- [x] **Task 13.1: 擴充為 12 大階梯魔王並開放「越級挑戰體驗護盾壓制」**
+  - 修改 `src/data/bosses.ts` & `src/components/ranch/BossArenaModal.tsx`：將魔王從 7 關擴充為 12 關（對應 15 題 ～ 3,457 題，要求戰力 120 CP ～ 7,400 CP）。
+  - 開放已擊敗前一關魔王的玩家可點擊「⚡ 越級試打」下一關魔王（未達題數或戰力時魔王擁有減傷護盾，且越級試打失敗不觸發降級/重傷，並給予明確的養成指引）。
+- [x] **Task 13.2: 實作魔王戰「玩家隊伍 HP 血條」與「魔王專屬主題抽題」**
   - 修改 `src/components/quiz/BossBattleBanner.tsx` & `src/App.tsx`：新增我方小隊 HP 血條，答錯時魔王反擊扣血，更具街機對決緊張感。
-  - 修改 `src/services/quizEngine.ts` `generateBossBattleQuiz`：依魔王特性（平翹舌音、一字多音、形近字、高頻必考題）加權抽取對應主題考題。
-- [ ] **Task 13.3: 驗證與 Git Commit**
+  - 修改 `src/services/quizEngine.ts` `generateBossBattleQuiz`：依魔王特性（平翹舌音、一字多音、形近字、鼻音韻母、高頻必考題）加權抽取對應主題考題。
+- [x] **Task 13.3: 驗證與 Git Commit**
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 14: 教育部辭典（萌典 Open Data）對接與「字首字根拆解（形符＋聲符）」題庫知識擴充

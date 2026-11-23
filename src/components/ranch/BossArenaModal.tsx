@@ -20,12 +20,13 @@ import {
   MilestoneGoal,
   PlayerProfile
 } from '../../types/game';
-import { BEAST_SPECIES_LIST } from '../../data/beasts';
+import { BEAST_SPECIES_LIST, getBestiaryBondsSummary } from '../../data/beasts';
 import {
   BOSS_LIST,
   ELEMENT_META,
   MILESTONE_GOALS,
   calculateDeckVsBossPower,
+  calculateTeamCombatPower,
   getBeastCardStars,
   getEffectiveBossRequiredCount,
   getResolvedBattleDeck,
@@ -78,6 +79,21 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
   const currentDeck = useMemo(
     () => getResolvedBattleDeck(beasts, profile.battleDeckIds),
     [beasts, profile.battleDeckIds]
+  );
+
+  const bestiaryBonds = useMemo(
+    () => getBestiaryBondsSummary(beasts, profile.unlockedSpeciesIds),
+    [beasts, profile.unlockedSpeciesIds]
+  );
+
+  const teamTotalPower = useMemo(
+    () =>
+      calculateTeamCombatPower(
+        beasts,
+        profile.battleDeckIds,
+        profile.unlockedSpeciesIds
+      ),
+    [beasts, profile.battleDeckIds, profile.unlockedSpeciesIds]
   );
 
   const defeatedBossIds = profile.defeatedBossIds || [];
@@ -260,9 +276,9 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
                 🎴 機台出戰卡槽 ({currentDeck.length}/3)
               </span>
               <span className="text-xs font-bold text-slate-300">
-                基礎卡組總戰力：
+                卡組總戰力（含圖鑑羈絆 +{bestiaryBonds.totalBonusCpPct}%）：
                 <strong className="text-amber-300 text-sm ml-1">
-                  ⚡ {currentDeck.reduce((s, b) => s + getSingleBeastPower(b), 0)} CP
+                  ⚡ {teamTotalPower} CP
                 </strong>
               </span>
             </div>
@@ -437,7 +453,7 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
               }`}
             >
               <Flame className="w-4 h-4" />
-              🕹️ 七大魔王機台挑戰 ({defeatedBossIds.length}/{BOSS_LIST.length})
+              🕹️ 十二大魔王機台挑戰 ({defeatedBossIds.length}/{BOSS_LIST.length})
             </button>
 
             <button
@@ -466,18 +482,26 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
         <div className="p-5 overflow-y-auto flex-1">
           {activeTab === 'bosses' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {BOSS_LIST.map((boss) => {
+              {BOSS_LIST.map((boss, idx) => {
                 const reqQuestions = getEffectiveBossRequiredCount(
                   boss,
                   totalQuestionsCount
                 );
                 const isQuestionsUnlocked = masteredCount >= reqQuestions;
                 const isDefeated = defeatedBossIds.includes(boss.bossId);
+                const prevBoss = idx > 0 ? BOSS_LIST[idx - 1] : null;
+                // 只要已擊敗上一關魔王，或題數達該關一半以上，即可開放「越級試打（體驗魔王護盾壓制且免戰損）」！
+                const canOverLevelTrial =
+                  !isQuestionsUnlocked &&
+                  (idx === 0 ||
+                    (prevBoss && defeatedBossIds.includes(prevBoss.bossId)) ||
+                    masteredCount >= Math.floor(reqQuestions * 0.45));
 
                 const { effectivePower, counterCount } = calculateDeckVsBossPower(
                   currentDeck,
                   boss,
-                  speciesMap
+                  speciesMap,
+                  bestiaryBonds.totalBonusCpPct
                 );
                 const isPowerEnough = effectivePower >= boss.requiredCombatPower;
                 const bossElem = ELEMENT_META[boss.element];
@@ -603,14 +627,14 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
                         ⚔️ 大將配卡
                       </button>
 
-                      {!isQuestionsUnlocked ? (
+                      {!isQuestionsUnlocked && !canOverLevelTrial ? (
                         <button
                           type="button"
                           disabled
                           className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-500 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-not-allowed"
                         >
                           <Lock className="w-4 h-4" />
-                          再通過 {reqQuestions - masteredCount} 題即可解鎖此魔王機台
+                          先擊敗前一關或再通過 {reqQuestions - masteredCount} 題解鎖
                         </button>
                       ) : (
                         <button
@@ -624,15 +648,19 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
                             onStartBossBattle(boss, currentDeck);
                           }}
                           className={`flex-1 py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-1.5 shadow-lg transition active:scale-95 ${
-                            isPowerEnough
+                            !isQuestionsUnlocked
+                              ? 'bg-gradient-to-r from-purple-700 to-rose-700 hover:from-purple-600 hover:to-rose-600 text-white border border-amber-300/60'
+                              : isPowerEnough
                               ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 hover:brightness-110'
                               : 'bg-rose-700 hover:bg-rose-600 text-white'
                           }`}
                         >
                           <Swords className="w-4 h-4" />
-                          {isPowerEnough
+                          {!isQuestionsUnlocked
+                            ? `⚡ 越級試打！（差 ${reqQuestions - masteredCount} 題破盾・失敗免戰損）`
+                            : isPowerEnough
                             ? '🕹️ 派卡出擊！挑戰魔王'
-                            : '⚠️ 越級硬打（建議先餵牧草升星）'}
+                            : '⚠️ 越級硬打（建議先升星或湊新世代卡）'}
                         </button>
                       )}
                     </div>

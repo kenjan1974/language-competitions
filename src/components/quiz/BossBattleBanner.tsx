@@ -12,6 +12,9 @@ import { getBeastLevel, getStageDisplayInfo, getStageForLevel } from '../../util
 interface BossBattleBannerProps {
   boss: BossEnemy;
   bossCurrentHp: number;
+  playerCurrentHp?: number;
+  playerMaxHp?: number;
+  isOverLevelTrial?: boolean;
   deck: BeastInstance[];
   speciesMap: Map<string, BeastSpecies>;
   lastAttackLog: {
@@ -21,12 +24,16 @@ interface BossBattleBannerProps {
     damage: number;
     isSuperEffective: boolean;
     isBossCounter?: boolean;
+    shieldReduced?: boolean;
   } | null;
 }
 
 export const BossBattleBanner: React.FC<BossBattleBannerProps> = ({
   boss,
   bossCurrentHp,
+  playerCurrentHp = 1000,
+  playerMaxHp = 1000,
+  isOverLevelTrial = false,
   deck,
   speciesMap,
   lastAttackLog
@@ -34,6 +41,10 @@ export const BossBattleBanner: React.FC<BossBattleBannerProps> = ({
   const hpPercent = Math.max(
     0,
     Math.min(100, Math.round((bossCurrentHp / boss.maxHp) * 100))
+  );
+  const playerHpPercent = Math.max(
+    0,
+    Math.min(100, Math.round((playerCurrentHp / Math.max(1, playerMaxHp)) * 100))
   );
   const bossElem = ELEMENT_META[boss.element];
   const weakElem = ELEMENT_META[boss.weaknessElement];
@@ -95,6 +106,28 @@ export const BossBattleBanner: React.FC<BossBattleBannerProps> = ({
                   </div>
                 );
               })}
+            </div>
+            {/* 我方小隊護盾 HP 血條 */}
+            <div className="mt-1 bg-black/30 px-2.5 py-1.5 rounded-xl border border-emerald-400/30">
+              <div className="flex items-center justify-between text-[11px] font-extrabold mb-1">
+                <span className="text-emerald-300 flex items-center gap-1">
+                  🛡️ 我方卡組護盾 HP
+                  {isOverLevelTrial && (
+                    <span className="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 text-[10px] font-black">
+                      越級試打・免戰損
+                    </span>
+                  )}
+                </span>
+                <span className="text-white">
+                  {playerCurrentHp.toLocaleString()} / {playerMaxHp.toLocaleString()}
+                </span>
+              </div>
+              <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-white/15">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all duration-300"
+                  style={{ width: `${playerHpPercent}%` }}
+                />
+              </div>
             </div>
           </div>
 
@@ -173,7 +206,8 @@ export const BossBattleBanner: React.FC<BossBattleBannerProps> = ({
                 <>
                   <ShieldAlert className="w-4 h-4" />
                   <span>
-                    答錯了！【{boss.name}】發動反擊咆哮，未能造成傷害！
+                    💥 答錯遭反擊！【{boss.name}】施展「{lastAttackLog.skillName}」，對我方護盾造成{' '}
+                    <strong className="underline">-{lastAttackLog.damage.toLocaleString()} HP</strong> 傷害！
                   </span>
                 </>
               ) : (
@@ -186,6 +220,11 @@ export const BossBattleBanner: React.FC<BossBattleBannerProps> = ({
                       -{lastAttackLog.damage.toLocaleString()} HP
                     </strong>{' '}
                     傷害！
+                    {lastAttackLog.shieldReduced && (
+                      <span className="ml-1 text-[11px] bg-black/25 px-2 py-0.5 rounded-full">
+                        🛡️ 受魔王護盾減傷（建議提升世代戰力或推進題數破盾！）
+                      </span>
+                    )}
                   </span>
                 </>
               )}

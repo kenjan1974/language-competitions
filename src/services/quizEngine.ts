@@ -57,6 +57,7 @@ export interface QuizRewardSummary {
   slimeDefeated: boolean;
   bossDefeated?: boolean;
   bossRemainingHp?: number;
+  playerShieldBroken?: boolean;
   companionBonusCoins: number;
   companionBonusForage: number;
   companionBonusGems: number;
@@ -86,6 +87,7 @@ export function shuffleArray<T>(arr: T[]): T[] {
 const RECENT_ID_HISTORY_LIMIT = 80;
 const RECENT_CHAR_HISTORY_LIMIT = 40;
 const MISTAKE_COOLDOWN_MS = 10 * 60 * 1000; // 錯題至少間隔 10 分鐘才在一般測驗再次抽到
+const FIRST_PASS_REVIEW_COOLDOWN_MS = 30 * 60 * 1000; // 初見僅答對 1 次的字音題，間隔 30 分鐘後安排 1 次鞏固回顧（防止四選一矇對一次就永不複習）
 
 const recentQuestionIds: string[] = [];
 const recentTargetChars: string[] = [];
@@ -135,6 +137,7 @@ function pickWeightedQuestions(
 
   const bucketMistakeReady: QuestionItem[] = [];
   const bucketMistakeRecent: QuestionItem[] = [];
+  const bucketFirstPassReview: QuestionItem[] = [];
   const bucketUnseenHighFreqFresh: QuestionItem[] = [];
   const bucketUnseenNormalFresh: QuestionItem[] = [];
   const bucketUnseenRecent: QuestionItem[] = [];
@@ -162,12 +165,25 @@ function pickWeightedQuestions(
         bucketUnseenNormalFresh.push(q);
       }
     } else {
-      bucketMasteredReview.push(q);
+      // 若為字音題且歷史僅靠單次答對 (correctCount === 1) 晉升，已過冷卻期則納入「初見鞏固回顧池」
+      if (
+        q.type === 'pronunciation' &&
+        prog &&
+        prog.correctCount === 1 &&
+        !isRecentId &&
+        !isRecentChar &&
+        timeSinceReview >= FIRST_PASS_REVIEW_COOLDOWN_MS
+      ) {
+        bucketFirstPassReview.push(q);
+      } else {
+        bucketMasteredReview.push(q);
+      }
     }
   }
 
   const shuffledMistakeReady = shuffleArray(bucketMistakeReady);
   const shuffledMistakeRecent = shuffleArray(bucketMistakeRecent);
+  const shuffledFirstPassReview = shuffleArray(bucketFirstPassReview);
   const shuffledUnseenHigh = shuffleArray(bucketUnseenHighFreqFresh);
   const shuffledUnseenNormal = shuffleArray(bucketUnseenNormalFresh);
   const shuffledUnseenRecent = shuffleArray(bucketUnseenRecent);
@@ -185,9 +201,13 @@ function pickWeightedQuestions(
   const selected = new Map<string, QuestionItem>();
   const usedTargetChars = new Set<string>();
 
-  // 一般測驗最多穿插 1 題已冷卻完畢的常錯題，把大部分名額留給全新題目！
+  // 一般測驗最多穿插 1 題已冷卻完畢的常錯題 + 約 15%（1 題）初見僅答對 1 次的字音鞏固回顧題，其餘皆給全新題目！
   const targetMistake = Math.min(shuffledMistakeReady.length, count >= 4 ? 1 : 0);
-  const remainingSlots = count - targetMistake;
+  const targetFirstPassReview = Math.min(
+    shuffledFirstPassReview.length,
+    count >= 5 ? Math.max(1, Math.floor(count * 0.15)) : 0
+  );
+  const remainingSlots = count - targetMistake - targetFirstPassReview;
   const targetUnseenHigh = Math.min(
     shuffledUnseenHigh.length,
     Math.ceil(remainingSlots * 0.35)
@@ -209,6 +229,7 @@ function pickWeightedQuestions(
   };
 
   takeFrom(shuffledMistakeReady, targetMistake, true);
+  takeFrom(shuffledFirstPassReview, targetFirstPassReview, true);
   takeFrom(shuffledUnseenHigh, targetUnseenHigh, true);
   takeFrom(shuffledUnseenNormal, targetUnseenNormal, true);
 
@@ -536,6 +557,7 @@ export async function settleQuizRewards(params: {
   subMode?: QuizSubMode;
   boss?: BossEnemy;
   bossRemainingHp?: number;
+  playerRemainingHp?: number;
   totalQuestions: number;
   correctCount: number;
   maxCombo: number;
@@ -552,6 +574,7 @@ export async function settleQuizRewards(params: {
     subMode,
     boss,
     bossRemainingHp = 0,
+    playerRemainingHp,
     totalQuestions,
     correctCount,
     maxCombo,
@@ -567,8 +590,15 @@ export async function settleQuizRewards(params: {
   const safeTotal = Math.max(1, totalQuestions);
   const passThreshold = Math.ceil(safeTotal * 0.6);
   const accuracy = Math.round((correctCount / safeTotal) * 100);
+  const playerShieldBroken =
+    mode === 'boss_battle' &&
+    typeof playerRemainingHp === 'number' &&
+    playerRemainingHp <= 0;
   const bossDefeated =
-    mode === 'boss_battle' && boss !== undefined && bossRemainingHp <= 0;
+    mode === 'boss_battle' &&
+    boss !== undefined &&
+    bossRemainingHp <= 0 &&
+    !playerShieldBroken;
   const passed =
     mode === 'boss_battle' ? bossDefeated : correctCount >= passThreshold;
   const slimeDefeated = mode === 'slime_boss' && passed;
@@ -934,6 +964,7 @@ export async function settleQuizRewards(params: {
     slimeDefeated,
     bossDefeated,
     bossRemainingHp,
+    playerShieldBroken,
     companionBonusCoins,
     companionBonusForage,
     companionBonusGems,

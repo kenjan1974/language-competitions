@@ -16,7 +16,7 @@ import { sound } from '../../utils/sound';
 
 interface ShopPack {
   id: string;
-  itemType: 'speedTickets' | 'gems' | 'forageCount';
+  itemType: 'speedTickets' | 'gems' | 'forageCount' | 'starDust';
   title: string;
   subtitle: string;
   amount: number;
@@ -50,6 +50,18 @@ const TICKET_PACKS: ShopPack[] = [
     stepCorrectPerBuy: 10,
     freeBuysBuffer: 0,
     badge: '超值省 50'
+  },
+  {
+    id: 'ticket_12',
+    itemType: 'speedTickets',
+    title: '千字宗師加速箱 ×12 張',
+    subtitle: '1,000 題階段解鎖！平均 100 金幣/張，快速孵化高世代 SSR 神蛋！',
+    amount: 12,
+    coinCost: 1200,
+    baseRequiredMastered: 1000,
+    stepCorrectPerBuy: 18,
+    freeBuysBuffer: 0,
+    badge: '1000題解鎖・省240'
   }
 ];
 
@@ -76,6 +88,45 @@ const FORAGE_PACKS: ShopPack[] = [
     stepCorrectPerBuy: 12,
     freeBuysBuffer: 0,
     badge: '150題解鎖'
+  },
+  {
+    id: 'forage_15',
+    itemType: 'forageCount',
+    title: '文曲宗師牧草庫 ×15 株',
+    subtitle: '500 題階段解鎖！海量 +225 EXP，加速將高世代神獸升至 ★5 覺醒！',
+    amount: 15,
+    coinCost: 980,
+    baseRequiredMastered: 500,
+    stepCorrectPerBuy: 18,
+    freeBuysBuffer: 0,
+    badge: '500題解鎖・省145'
+  }
+];
+
+const STARDUST_PACKS: ShopPack[] = [
+  {
+    id: 'stardust_20',
+    itemType: 'starDust',
+    title: '奇獸星魂結晶 ×20 點',
+    subtitle: '500 題階段解鎖！累積 60 星魂可於抽蛋屋 100% 定向許願未收錄奇獸！',
+    amount: 20,
+    coinCost: 450,
+    baseRequiredMastered: 500,
+    stepCorrectPerBuy: 15,
+    freeBuysBuffer: 0,
+    badge: '500題解鎖・保底必備'
+  },
+  {
+    id: 'stardust_60',
+    itemType: 'starDust',
+    title: '星魂定向許願包 ×60 點',
+    subtitle: '1,500 題階段解鎖！買完立刻可抽 1 次「星魂定向許願池」，直補缺漏圖鑑！',
+    amount: 60,
+    coinCost: 1280,
+    baseRequiredMastered: 1500,
+    stepCorrectPerBuy: 25,
+    freeBuysBuffer: 0,
+    badge: '1500題解鎖・直抽新奇獸'
   }
 ];
 
@@ -216,6 +267,17 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
       setNotice(
         `🌿 兌換成功！花費 ${pack.coinCost} 金幣，獲得靈氣牧草 +${pack.amount} 株！`
       );
+    } else if (pack.itemType === 'starDust') {
+      await db.profile.update('default_player', {
+        coins: profile.coins - pack.coinCost,
+        starDust: (profile.starDust ?? 0) + pack.amount,
+        shopPurchaseCounts: nextShopCounts
+      });
+      sound.playCorrect(pack.amount >= 60 ? 5 : 3);
+      setIsErrorNotice(false);
+      setNotice(
+        `🌟 兌換成功！花費 ${pack.coinCost} 金幣，獲得奇獸星魂 +${pack.amount} 點！`
+      );
     } else {
       await db.profile.update('default_player', {
         coins: profile.coins - pack.coinCost,
@@ -230,7 +292,10 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
     }
   };
 
-  const renderPackCard = (pack: ShopPack, theme: 'sky' | 'emerald' | 'purple') => {
+  const renderPackCard = (
+    pack: ShopPack,
+    theme: 'sky' | 'emerald' | 'purple' | 'amber'
+  ) => {
     const status = getPackStatus(pack);
     const canAfford = profile.coins >= pack.coinCost;
     const isLocked = !status.isStageUnlocked || !status.isQuotaReady;
@@ -240,6 +305,8 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
         ? 'bg-sky-50/70 border-sky-200'
         : theme === 'emerald'
         ? 'bg-emerald-50/70 border-emerald-200'
+        : theme === 'amber'
+        ? 'bg-amber-50/80 border-amber-300'
         : 'bg-purple-50/70 border-purple-200';
 
     const btnActiveClass =
@@ -247,10 +314,18 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
         ? 'bg-sky-600 hover:bg-sky-500 text-white'
         : theme === 'emerald'
         ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+        : theme === 'amber'
+        ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950'
         : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white';
 
     const iconEmoji =
-      theme === 'sky' ? '⚡' : theme === 'emerald' ? '🌿' : '💎';
+      theme === 'sky'
+        ? '⚡'
+        : theme === 'emerald'
+        ? '🌿'
+        : theme === 'amber'
+        ? '🌟'
+        : '💎';
 
     return (
       <div
@@ -384,6 +459,11 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
               <span className="font-black text-purple-950 text-sm">{profile.gems}</span>
               <span className="text-xs font-bold text-purple-800">寶石</span>
             </div>
+            <div className="px-3 py-1 rounded-xl bg-orange-100 border border-orange-300 flex items-center gap-1.5">
+              <span className="text-sm">🌟</span>
+              <span className="font-black text-orange-950 text-sm">{profile.starDust ?? 0}</span>
+              <span className="text-xs font-bold text-orange-800">星魂</span>
+            </div>
           </div>
         </div>
 
@@ -419,7 +499,7 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
                 🌿 採購靈氣牧草（餵食奇獸升級升星）
               </h4>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {FORAGE_PACKS.map((pack) => renderPackCard(pack, 'emerald'))}
             </div>
           </div>
@@ -434,7 +514,7 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
                 ⚡ 兌換孵蛋加速券（每張推進 +5 步）
               </h4>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {TICKET_PACKS.map((pack) => renderPackCard(pack, 'sky'))}
             </div>
           </div>
@@ -451,6 +531,21 @@ export const CoinShopModal: React.FC<CoinShopModalProps> = ({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {GEM_PACKS.map((pack) => renderPackCard(pack, 'purple'))}
+            </div>
+          </div>
+
+          {/* 區塊四：高階階段解鎖・奇獸星魂（500~1500題以上專享） */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <h4 className="font-extrabold text-base text-slate-800">
+                🌟 兌換奇獸星魂（60 星魂可於抽蛋屋 100% 定向許願未收錄新奇獸）
+              </h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {STARDUST_PACKS.map((pack) => renderPackCard(pack, 'amber'))}
             </div>
           </div>
         </div>

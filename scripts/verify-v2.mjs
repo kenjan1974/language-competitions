@@ -214,6 +214,35 @@ function runTests() {
     }
   });
 
+  check('Phase 16 校準檢核：魔王 HP 歸零判定、最終魔王 >= 13000 CP、初見字音回顧池、商店高階星魂包與主將副將同步', () => {
+    assert.ok(
+      appSrc.includes('nextPlayerHp <= 0') && quizEngineSrc.includes('playerShieldBroken'),
+      'Missing player shield-break defeat check on HP <= 0'
+    );
+    const bossPowers = [...bossesSrc.matchAll(/requiredCombatPower:\s*(\d+)/g)].map((m) =>
+      Number(m[1])
+    );
+    assert.ok(
+      bossPowers[bossPowers.length - 1] >= 13000,
+      `Final boss CP (${bossPowers[bossPowers.length - 1]}) should be >= 13000`
+    );
+    assert.ok(
+      quizEngineSrc.includes('bucketFirstPassReview') &&
+        quizEngineSrc.includes('FIRST_PASS_REVIEW_COOLDOWN_MS'),
+      'Missing first-pass pronunciation review bucket in quizEngine.ts'
+    );
+    const shopSrc = fs.readFileSync(path.join(ROOT, 'src/components/ranch/CoinShopModal.tsx'), 'utf-8');
+    assert.ok(
+      shopSrc.includes('STARDUST_PACKS') && shopSrc.includes('baseRequiredMastered: 1500'),
+      'Missing high-tier CoinShop packs & starDust packs'
+    );
+    const ranchSrc = fs.readFileSync(path.join(ROOT, 'src/components/ranch/RanchDashboard.tsx'), 'utf-8');
+    assert.ok(
+      ranchSrc.includes('syncedDeckIds') && ranchSrc.includes('同行副將'),
+      'Missing active companion <-> 3-slot deck sync & sub-commander display'
+    );
+  });
+
   console.log(`\n🎉 全部 ${passedChecks} 項自動化驗證測試 100% 通過！`);
 }
 

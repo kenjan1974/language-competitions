@@ -438,7 +438,9 @@ export const ChallengeResultModal: React.FC<ChallengeResultModalProps> = ({
               : isLevelDown
               ? `💔 戰損！${battlePenalty?.beastName}降為 Lv.${battlePenalty?.newLevel}`
               : isBoss
-              ? `👾 ${bossName}未倒下…挑戰失敗`
+              ? rewardSummary.playerShieldBroken
+                ? `💥 護盾擊破！遭${bossName}反殺撤退`
+                : `👾 ${bossName}未倒下…挑戰失敗`
               : '💪 差一點點！挑戰失敗'}
           </h2>
 

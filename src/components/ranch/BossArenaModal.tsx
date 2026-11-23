@@ -125,9 +125,18 @@ export const BossArenaModal: React.FC<BossArenaModalProps> = ({
       }
     }
 
-    await db.profile.update('default_player', {
+    const nextUpdates: Partial<PlayerProfile> = {
       battleDeckIds: nextIds
-    });
+    };
+    // 同步將 3 卡槽第 1 張卡（主將）與牧場出戰夥伴對齊
+    if (
+      nextIds.length > 0 &&
+      (profile.tacticalStance !== 'scout' || !nextIds.includes(profile.activeBeastId || ''))
+    ) {
+      nextUpdates.activeBeastId = nextIds[0];
+    }
+
+    await db.profile.update('default_player', nextUpdates);
   };
 
   // 一鍵編成「🛡️ 斥候小兵偵察隊」（優先挑選等級最低的 Lv.1~2 小兵探路，保護主力大將卡匣）

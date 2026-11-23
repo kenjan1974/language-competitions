@@ -295,9 +295,18 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
     }
     const chosenLv = chosen ? getBeastLevel(chosen) : 1;
     const nextStance = chosenLv <= 2 ? 'scout' : 'general';
+    // 同步將出戰夥伴設為 3 卡槽第 1 位（主將），保留其餘 2 名副將，徹底打通單隻夥伴與三卡槽陣容！
+    const currentDeck = getResolvedBattleDeck(beasts, profile.battleDeckIds);
+    const otherDeckIds = currentDeck
+      .map((b) => b.instanceId)
+      .filter((id) => id !== instanceId)
+      .slice(0, 2);
+    const syncedDeckIds = [instanceId, ...otherDeckIds];
+
     await db.profile.update('default_player', {
       activeBeastId: instanceId,
-      tacticalStance: nextStance
+      tacticalStance: nextStance,
+      battleDeckIds: syncedDeckIds
     });
     if (chosen) {
       showToast(
@@ -358,9 +367,15 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
         await db.beasts.update(general.instanceId, { inStorage: false });
       }
       const lv = getBeastLevel(general);
+      const currentDeck = getResolvedBattleDeck(beasts, profile.battleDeckIds);
+      const otherDeckIds = currentDeck
+        .map((b) => b.instanceId)
+        .filter((id) => id !== general.instanceId)
+        .slice(0, 2);
       await db.profile.update('default_player', {
         tacticalStance: 'general',
-        activeBeastId: general.instanceId
+        activeBeastId: general.instanceId,
+        battleDeckIds: [general.instanceId, ...otherDeckIds]
       });
       setSelectedBeastId(general.instanceId);
       showToast(
@@ -905,6 +920,29 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                 '請選擇要派「小兵探路」或「大將出馬」！'
               )}
             </p>
+            {/* 主畫面即時顯示同行 2 名副將（3 卡槽小隊協同） */}
+            {subDeckSynergy.subBeasts.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold">
+                <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-200">
+                  🎴 同行副將 (+{subDeckSynergy.bonusSeconds}秒 / +{subDeckSynergy.bonusCoinsPct}%金幣)：
+                </span>
+                {subDeckSynergy.subBeasts.map((sub) => {
+                  const subSp = speciesMap.get(sub.speciesId);
+                  const subLv = getBeastLevel(sub);
+                  const subInfo = subSp
+                    ? getStageDisplayInfo(getStageForLevel(subLv), subSp)
+                    : null;
+                  return (
+                    <span
+                      key={sub.instanceId}
+                      className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200"
+                    >
+                      {subInfo?.emoji || '🦊'} {subInfo?.name || sub.nickname} Lv.{subLv}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

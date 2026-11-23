@@ -8,8 +8,9 @@
   - **Phase 13**：12 大主題街機魔王（120 CP ～ 7,400 CP）、開放越級試打體驗護盾壓制（越級失敗免戰損）、我方小隊護盾 HP 血條與魔王主題弱點抽題。
   - **Phase 14**：完成教育部《重編國語辭典修訂本》（萌典 Open Data）自動化對接與字首字根拆解（`scripts/enrich-questions.mjs` & `src/utils/wordKnowledge.ts`），為 3,457 題注入詞義、單字部首本義、典故出處、例句與一字多音家族對照，並全數修正 61 題樣板 `strokeHint`。
   - **Phase 15**：完成「不死背」三層式語境學習 UI（字音關作答詞義膠囊＋答錯暫停看字根解析卡、字形關詞義與部首字根提示、結算畫面本局字詞知識回顧、錯題本展開字典釋義與同字多音家族）。
+  - **Phase 16**：完成 V2 實碼盤點 5 項漏洞修補與數值精準校準（魔王戰我方護盾 HP 歸零正式觸發敗退、12 關魔王戰力曲線校準至 120～13,500 CP、主將與 3 卡槽第 1 位自動同步＋主畫面同行副將展示、初見單次答對字音題 15% 鞏固回顧池、金幣補給站新增 500/1000/1500 題高階牧草/加速券與星魂禮包）。
 - **最後更新時間**：2026-11-23
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：全數 V2 規劃階段（Phase 10 ~ Phase 15）皆已實作、驗證並提交 Git Commit。後續可直接啟動 `npm run dev` 供 iPad 實機遊玩，或使用 `npm run enrich-questions` / `npm run extract-pdf` 擴充新題庫。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：全數 V2 規劃階段（Phase 10 ~ Phase 16）皆已實作、通過 15 項自動化測試與 Vite PWA 正式編譯並提交 Git Commit。後續可直接啟動 `npm run dev` 供 iPad 實機遊玩，或使用 `npm run enrich-questions` / `npm run extract-pdf` 擴充新題庫。
 
 ---
 
@@ -88,6 +89,19 @@
 - [x] **Task 15.4: 最終建置驗證與 Git Commit**
   - 執行完整 `./node_modules/.bin/tsc --noEmit` 與建置測試，更新 `PROGRESS.md` 並執行 `git commit`。
 
+### Phase 16: V2 實碼盤點 5 項漏洞修補與數值精準校準
+- [x] **Task 16.1: 修復魔王戰我方護盾 HP 歸零判定 (`src/App.tsx`, `src/services/quizEngine.ts`, `src/components/quiz/ChallengeResultModal.tsx`)**
+  - 當我方小隊護盾 HP 遭魔王反擊扣至 `0` 時，立即觸發「護盾擊破、提前敗退」並於結算畫面明確標示 `playerShieldBroken`。
+- [x] **Task 16.2: 重新校準第 3 ～ 12 關魔王戰力曲線 (`src/data/bosses.ts`)**
+  - 將第 3 ～ 12 關魔王戰力需求階梯校準為 `1,250` ➔ `2,200` ➔ `3,300` ➔ `4,500` ➔ `5,800` ➔ `7,200` ➔ `8,600` ➔ `10,200` ➔ `11,800` ➔ `13,500 CP`，與 10 大世代戰力階梯及圖鑑羈絆完美對齊。
+- [x] **Task 16.3: 打通「主將＋2 副將」三人小隊同步 (`src/components/ranch/RanchDashboard.tsx`, `src/components/ranch/BossArenaModal.tsx`)**
+  - 牧場切換出戰夥伴與機台編組卡匣雙向同步 `battleDeckIds[0]` 與 `activeBeastId`，並於牧場主畫面即時顯示目前同行的 2 名副將與協同加成。
+- [x] **Task 16.4: 補強「初見矇對字音鞏固回顧」記憶池 (`src/services/quizEngine.ts`)**
+  - 保留初見答對即計入進度的正向回饋，同時於智慧抽題新增 `bucketFirstPassReview`（間隔 30 分鐘後保留約 15% 配額回顧僅答對過 1 次的字音題，答對達 2 次後真正封存）。
+- [x] **Task 16.5: 擴充金幣補給站高階商品與星魂禮包 (`src/components/ranch/CoinShopModal.tsx`)**
+  - 新增 500 題解鎖「文曲宗師牧草庫 ×15」與「奇獸星魂結晶 ×20」、1,000 題解鎖「千字宗師加速箱 ×12」、1,500 題解鎖「星魂定向許願包 ×60」。
+- [x] **Task 16.6: 15 項自動化測試、TypeScript 編譯、Vite PWA 打包驗證與 Git Commit**
+
 ---
 
 ## 任務清單 (Task Checklist)
@@ -140,6 +154,15 @@
 
 ## AI Agent 交接日誌 (Handoff Log)
 > 每次 Agent 結束工作前，請在下方新增一筆紀錄（由新到舊排列）：
+
+### 2026-11-23 - Phase 16: V2 Audit Fixes & Balance Calibration
+- **完成任務**：
+  - **魔王戰我方護盾 HP 歸零判定**：於 `src/App.tsx`、`src/services/quizEngine.ts`、`src/components/quiz/ChallengeResultModal.tsx` 實作 `playerRemainingHp <= 0` 立即觸發「護盾擊破、提前敗退 (`playerShieldBroken`)」。
+  - **12 關魔王戰力曲線校準**：於 `src/data/bosses.ts` 將第 3～12 關魔王戰力需求階梯上調至 `1,250 ～ 13,500 CP`，與 10 大世代 `+12%/世代` 及圖鑑羈絆戰力完美對齊。
+  - **主將＋2 副將雙向同步**：於 `src/components/ranch/RanchDashboard.tsx` 與 `src/components/ranch/BossArenaModal.tsx` 打通 `activeBeastId` 與 `battleDeckIds[0]` 雙向同步，並於牧場首頁直接顯示同行 2 名副將與協同加成。
+  - **初見單次答對字音鞏固回顧**：於 `src/services/quizEngine.ts` 新增 `bucketFirstPassReview`（間隔 30 分鐘後保留約 15% 配額回顧僅答對 1 次的字音題，答對達 2 次真正封存）。
+  - **金幣補給站高階商品擴充**：於 `src/components/ranch/CoinShopModal.tsx` 新增 500/1000/1500 題解鎖的高階牧草庫、千字宗師加速箱與星魂結晶／許願包。
+- **目前系統狀態**：`npm test`（15/15 項通過）、`tsc --noEmit`（零錯誤）、`vite build`（PWA 打包通過）。
 
 ### 2026-11-23 - V2 Full Evolution (Phase 10 ~ Phase 15: 10 Generations, Bestiary Bonds, Star Wish Pity, Boss 2.0 & Moedict Etymology System)
 - **完成任務**：

@@ -339,11 +339,19 @@ export default function App() {
       setLastAttackLog({
         id: Date.now(),
         attackerName: boss.name,
-        skillName: '魔王破陣反擊',
+        skillName:
+          nextPlayerHp <= 0 ? '魔王終結破盾一擊（我方護盾歸零！）' : '魔王破陣反擊',
         damage: bossDamage,
         isSuperEffective: false,
         isBossCounter: true
       });
+
+      // 當我方小隊護盾 HP 歸零時，正式判定「護盾擊破、提前敗退」並立即進入結算！
+      if (nextPlayerHp <= 0) {
+        window.setTimeout(() => {
+          handleFinishQuizSession();
+        }, 900);
+      }
       return;
     }
 
@@ -481,6 +489,8 @@ export default function App() {
       subMode: quizSession.subMode,
       boss: quizSession.boss,
       bossRemainingHp: bossHpRef.current,
+      playerRemainingHp:
+        quizSession.mode === 'boss_battle' ? playerHpRef.current : undefined,
       totalQuestions,
       correctCount: correctCountRef.current,
       maxCombo: maxComboRef.current,
@@ -693,6 +703,8 @@ export default function App() {
                 {quizSession.mode === 'boss_battle'
                   ? rewardSummary.bossDefeated
                     ? `🎉 討伐成功！擊破【${quizSession.boss?.name}】！`
+                    : rewardSummary.playerShieldBroken
+                    ? `💥 我方小隊護盾歸零！遭【${quizSession.boss?.name}】擊退（魔王剩餘 ${(rewardSummary.bossRemainingHp ?? 0).toLocaleString()} HP）`
                     : `🔥 魔王【${quizSession.boss?.name}】殘血逃脫（剩餘 ${(rewardSummary.bossRemainingHp ?? 0).toLocaleString()} HP）`
                   : quizSession.mode === 'slime_boss'
                   ? rewardSummary.passed

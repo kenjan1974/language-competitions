@@ -1,9 +1,86 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：Phase 9 五大世代 32 種奇獸階段解鎖 ＋ 奇獸皇家倉庫（一鍵收納重複奇獸）＋ 循序漸進升級與商店門檻 ＋ 戰敗戰損降級與低於 20% 奇獸消滅機制完成
+- **目前階段**：V2 全方位升級規劃書已完成（Phase 10 ～ Phase 15 路線圖已建置），準備開始執行 **Phase 10（戰損安全保護機制、永久圖鑑點亮與小隊協同重構）**
 - **最後更新時間**：2026-11-23
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：所有新世代奇獸、奇獸倉庫與戰損懲罰機制皆已完成並與既有存檔完全相容（女兒的 150 題存檔載入後將立即解鎖第 2 世代 5 種新奇獸與新世代焦點蛋池，並可一鍵將重複奇獸收納至倉庫）。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 10` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
+
+---
+
+## V2 升級任務清單 (Phase 10 ~ Phase 15 Roadmap)
+> **交接鐵則**：每完成一個 Phase，請立即勾選 `[x]`、在下方 Handoff Log 留下記錄，並執行 `git add -A && git commit -m "..."`，讓任何接手的 Agent 都能無縫接力！
+
+### Phase 10: 戰損安全保護機制、永久圖鑑點亮與 3 卡槽小隊協同重構
+- [ ] **Task 10.1: 廢除「<20% 永久刪除奇獸」，改為「🩹 重傷休養 (`isInjured`) 與雙軌療傷機制」**
+  - 修改 `src/types/game.ts`：`BeastInstance` 新增 `isInjured?: boolean`、`injuryRecoveryProgress?: number`、`injuryRecoveryTarget?: number`；`PlayerProfile` 新增 `unlockedSpeciesIds?: string[]`、`starDust?: number`；`BattlePenaltySummary.type` 支援 `'level_down' | 'injured'`。
+  - 修改 `src/services/quizEngine.ts`：
+    - 答對率 `< 20%` 時不再 `db.beasts.delete()`，改為將該參戰奇獸設為 `isInjured: true`、`injuryRecoveryProgress: 0`、`injuryRecoveryTarget: 12` 並降 1 級（最低 Lv.1）。
+    - 在 `recordQuestionAttempt` 中，每答對 1 題同步推進所有 `isInjured` 奇獸的 `injuryRecoveryProgress + 1`，達標即自動康復 (`isInjured: false`)！
+  - 修改 `src/components/ranch/RanchDashboard.tsx` & `src/components/quiz/ChallengeResultModal.tsx`：
+    - 顯示「🩹 重傷休養中（答對 X/12 題康復）」徽章，並提供「🌿 餵食 2 株靈氣牧草立即治癒」按鈕。
+    - 重傷奇獸暫不計入出戰卡組與 Lv.6 滿級光環。
+- [ ] **Task 10.2: 中途安全撤退機制與永久圖鑑點亮紀錄**
+  - 修改 `src/App.tsx`：測驗中途點擊「返回奇幻牧場」時，若尚未作答任何題目直接安全返回；若已作答則提供「🏳️ 戰術安全撤退（放棄本局獎勵，奇獸零戰損返回牧場）」確認，徹底杜絕中途退出誤觸 `<20%` 懲罰的 Bug。
+  - 修改 `src/components/ranch/RanchDashboard.tsx`：孵化奇獸時同步寫入 `profile.unlockedSpeciesIds`，全圖鑑改以 `unlockedSpeciesIds ∪ 目前已孵化奇獸` 判定點亮狀態，確保圖鑑永不熄滅。
+- [ ] **Task 10.3: 3 卡槽「主將＋副將」協同加成與錯題本連對顯示統一**
+  - 修改 `src/utils/beastPerks.ts` & `src/App.tsx`：將機台 3 張出戰卡槽的第 2、3 張副將納入日常與魔王戰協同加成（副將依等級提供額外金幣加成與字音思考秒數）。
+  - 修改 `src/components/ranch/MistakeNotebookModal.tsx`：將常錯題解除進度文字統一為「連續答對 2 次解除（`prog.consecutiveCorrect / 2`）」，與 `quizEngine.ts` 邏輯完全一致。
+- [ ] **Task 10.4: 驗證與 Git Commit**
+  - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
+
+### Phase 11: 10 大世代 62 種奇獸擴充、世代戰力階梯與 3,457 題完整里程碑
+- [ ] **Task 11.1: 擴充至 10 大世代共 62 種奇獸 (`src/data/beasts.ts`)**
+  - 新增第 6 世代（1,300 題解鎖，山海異獸 6 種）、第 7 世代（1,650 題解鎖，詩詞仙靈 6 種）、第 8 世代（2,050 題解鎖，甲骨聖殿 6 種）、第 9 世代（2,500 題解鎖，星河奧義 6 種）、第 10 世代（3,000~3,300 題解鎖，萬字創世神 6 種），共 62 種奇獸完整三階設定。
+  - 更新 `getCurrentUnlockedGeneration` 與 `GENERATION_META` 支援 1 ～ 10 世代。
+- [ ] **Task 11.2: 實作「跨世代戰力階梯 (`Generation CP Multiplier`)」(`src/data/bosses.ts`)**
+  - 修改 `getSingleBeastPower`：依據奇獸所屬 `generation (1~10)` 提供 `1 + (gen - 1) * 0.12` 世代戰力倍率，讓高世代奇獸擁有顯著更高的戰力天花板。
+- [ ] **Task 11.3: 擴充 12 大階段里程碑（涵蓋 50 題 ～ 3,457 題 100% 制霸）**
+  - 在 `src/data/bosses.ts` 的 `MILESTONE_GOALS` 新增 `1300題`、`1650題`、`2050題`、`2500題`、`3000題` 階段大獎與專屬新世代神蛋獎勵。
+- [ ] **Task 11.4: 驗證與 Git Commit**
+  - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
+
+### Phase 12: 圖鑑套卡羈絆系統（Collection Sets）與重複卡「星魂許願池（保底機制）」
+- [ ] **Task 12.1: 實作 10 大世代「圖鑑羈絆套卡加成 (`Bestiary Bonds`)」**
+  - 在 `src/data/beasts.ts` & `src/utils/beastPerks.ts` 新增世代圖鑑羈絆計算：每集齊一個世代的奇獸（含倉庫與曾解鎖圖鑑），永久獲得全隊戰力 `%`、金幣 `%` 或字音秒數加成，並在圖鑑 Modal 與牧場顯示羈絆啟動狀態。
+- [ ] **Task 12.2: 實作重複卡轉化「🌟 奇獸星魂 (`starDust`)」與「🌠 星魂定向許願池」**
+  - 在 `src/components/ranch/BeastStorageModal.tsx` 新增「✨ 一鍵將多餘重複奇獸轉化為星魂」按鈕（自動保留每品種最強的 1 隻與出戰卡組，其餘重複卡依 N=5 / R=15 / SR=40 / SSR=100 轉為星魂）。
+  - 在 `src/components/ranch/RanchDashboard.tsx` 神秘抽蛋屋新增第 4 池「🌠 星魂許願池（消耗 60 星魂）」：100% 保證抽出目前已解鎖世代中**尚未收錄過的新品種奇獸蛋**！
+- [ ] **Task 12.3: 驗證與 Git Commit**
+  - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
+
+### Phase 13: 街機魔王戰 2.0（12 大主題魔王 ＋ 越級挑戰護盾壓制 ＋ 玩家隊伍 HP 與主題題庫）
+- [ ] **Task 13.1: 擴充為 12 大階梯魔王並開放「越級挑戰體驗護盾壓制」**
+  - 修改 `src/data/bosses.ts` & `src/components/ranch/BossArenaModal.tsx`：將魔王從 7 關擴充為 12 關（對應 15 題 ～ 3,457 題，要求戰力 120 CP ～ 7,500 CP）。
+  - 開放已擊敗前一關魔王的玩家可點擊「⚠️ 越級試打」下一關魔王（未達題數或戰力時魔王擁有減傷護盾，且越級試打失敗不觸發降級/重傷，並給予明確的養成指引）。
+- [ ] **Task 13.2: 實作魔王戰「玩家隊伍 HP 血條」與「魔王專屬主題抽題」**
+  - 修改 `src/components/quiz/BossBattleBanner.tsx` & `src/App.tsx`：新增我方小隊 HP 血條，答錯時魔王反擊扣血，更具街機對決緊張感。
+  - 修改 `src/services/quizEngine.ts` `generateBossBattleQuiz`：依魔王特性（平翹舌音、一字多音、形近字、高頻必考題）加權抽取對應主題考題。
+- [ ] **Task 13.3: 驗證與 Git Commit**
+  - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
+
+### Phase 14: 教育部辭典（萌典 Open Data）對接與「字首字根拆解（形符＋聲符）」題庫知識擴充
+- [ ] **Task 14.1: 擴充 `QuestionItem` 結構與內建字根/同字家族解析引擎 (`src/utils/wordKnowledge.ts`)**
+  - 在 `src/types/game.ts` 新增 `meaning`、`charMeaning`、`etymologyHint`、`confusableNote`、`classicSource`、`exampleSentence` 欄位。
+  - 建立 `src/utils/wordKnowledge.ts`：
+    - 自動索引全題庫 3,457 題的「同字多音家族（一字多音對照）」與「同字多詞關聯」。
+    - 內建常用部首意符（形符表義）與形聲字根拆解引擎，為所有題目即時提供「部首字首意義 ＋ 聲符讀音線索」。
+- [ ] **Task 14.2: 撰寫並執行教育部辭典（萌典 Moedict）自動化批次擴充腳本 (`scripts/enrich-questions.mjs`)**
+  - 撰寫 `scripts/enrich-questions.mjs`，針對 `src/data/questions.json` 的 3,457 題自動查詢教育部辭典開放資料，寫入標準詞義、目標字字義、典故出處與例句，並將 61 題制式樣板 `strokeHint` 全部替換為真實部首筆順與字根提示。
+  - 更新 `src/db/database.ts` 版本同步邏輯，確保舊存檔玩家載入時自動無損更新 3,457 題的豐富字典解釋（保留既有作答進度 `progress`）。
+- [ ] **Task 14.3: 驗證與 Git Commit**
+  - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
+
+### Phase 15: 「不死背」三層式語境學習 UI（作答字義膠囊 ＋ 答錯暫停看字根解析卡 ＋ 結算回顧與同字家族）
+- [ ] **Task 15.1: 升級疾風字音陣 (`src/components/quiz/PronunciationStage.tsx`)**
+  - 作答後即時顯示「📖 詞義與目標字解釋膠囊」。
+  - **答錯或超時時暫停自動跳題**：展開「🧩 字根拆解 ＆ 同字多音對照卡」（顯示詞義、典故/例句、同一個字在不同詞語的讀音對照），由玩家點擊「💡 看懂了，下一題 ➔」再繼續。
+- [ ] **Task 15.2: 升級首領字形關 (`src/components/quiz/CharacterWritingStage.tsx`)**
+  - 在題目卡上方/下方顯示「📖 詞語意思」與「🧩 字首部首意符拆解」，讓學生先理解詞義與部首關聯再動筆書寫。
+- [ ] **Task 15.3: 升級結算回顧 (`src/App.tsx`) 與錯題本同字家族面板 (`src/components/ranch/MistakeNotebookModal.tsx`)**
+  - 在挑戰結算畫面新增「📜 本局字詞知識回顧清單」（可展開查看每題的詞義、字根拆解與同字家族）。
+  - 在錯題本每張題目卡新增「📖 展開字典釋義 ＆ 同字多音家族」功能。
+- [ ] **Task 15.4: 最終建置驗證與 Git Commit**
+  - 執行完整 `./node_modules/.bin/tsc --noEmit` 與建置測試，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ---
 

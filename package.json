@@ -7,7 +7,8 @@
     "dev": "vite --configLoader runner",
     "build": "tsc --noEmit && vite build --configLoader runner",
     "preview": "vite preview --configLoader runner",
-    "extract-pdf": "node scripts/extract-pdfs.mjs"
+    "extract-pdf": "node scripts/extract-pdfs.mjs",
+    "enrich-questions": "node scripts/enrich-questions.mjs --moedict"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",

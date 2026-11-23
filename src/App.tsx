@@ -48,6 +48,7 @@ import {
   getSubDeckSynergySummary,
   resolveActiveCompanion
 } from './utils/beastPerks';
+import { getWordKnowledgeCard } from './utils/wordKnowledge';
 import { PronunciationStage } from './components/quiz/PronunciationStage';
 import { CharacterWritingStage } from './components/quiz/CharacterWritingStage';
 import { BossBattleBanner } from './components/quiz/BossBattleBanner';
@@ -612,6 +613,7 @@ export default function App() {
       {view === 'quiz_pronunciation' && quizSession && (
         <PronunciationStage
           questions={quizSession.pronunciationQuestions}
+          allQuestions={questions}
           combo={combo}
           activeCompanion={activeCompanion}
           shieldsRemaining={shieldsRemaining}
@@ -625,6 +627,7 @@ export default function App() {
       {view === 'quiz_character' && quizSession && (
         <CharacterWritingStage
           questions={quizSession.characterQuestions}
+          allQuestions={questions}
           defaultMode={profile.handwritingMode}
           activeCompanion={activeCompanion}
           freePeeksRemaining={freePeeksRemaining}
@@ -640,6 +643,7 @@ export default function App() {
       {view === 'single_practice' && singlePracticeQuestion && (
         <CharacterWritingStage
           questions={[singlePracticeQuestion]}
+          allQuestions={questions}
           defaultMode={profile.handwritingMode}
           isSinglePractice={true}
           onQuestionResult={async (qId, isCorrect, peeked) => {
@@ -867,6 +871,73 @@ export default function App() {
                   </>
                 )}
               </button>
+            </div>
+
+            {/* 本局字詞知識回顧清單（教育部辭典釋義 ＆ 字首字根拆解） */}
+            <div className="w-full mt-4 pt-4 border-t-2 border-slate-100 text-left">
+              <h3 className="font-extrabold text-sm md:text-base text-slate-800 mb-2.5 flex items-center justify-between">
+                <span>📜 本局字詞知識回顧（教育部辭典釋義 ＆ 字首字根）</span>
+                <span className="text-xs font-bold text-slate-500">
+                  共 {totalQuizQuestions} 題
+                </span>
+              </h3>
+              <div className="flex flex-col gap-2.5 max-h-80 overflow-y-auto pr-1">
+                {[
+                  ...quizSession.pronunciationQuestions,
+                  ...quizSession.characterQuestions
+                ].map((q, idx) => {
+                  const kw = getWordKnowledgeCard(q, questions);
+                  return (
+                    <div
+                      key={q.id}
+                      className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs flex flex-col gap-1"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-black">
+                            #{idx + 1} {q.type === 'pronunciation' ? '字音' : '字形'}
+                          </span>
+                          <span className="font-extrabold text-sm text-slate-900">
+                            {q.fullWord}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 font-extrabold">
+                            「{q.targetChar}」讀作【{q.targetZhuyin}】
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handlePracticeSingleQuestion(q)}
+                          className="text-indigo-600 hover:text-indigo-800 font-extrabold underline"
+                        >
+                          ✍️ 練寫此字
+                        </button>
+                      </div>
+                      {kw.wordMeaning && (
+                        <div className="text-slate-700 font-semibold">
+                          <strong className="text-indigo-700">📖 詞義：</strong>
+                          {kw.wordMeaning}
+                        </div>
+                      )}
+                      {kw.charMeaning && (
+                        <div className="text-slate-700 font-semibold">
+                          <strong className="text-emerald-700">🔤 字義：</strong>
+                          {kw.charMeaning}
+                        </div>
+                      )}
+                      <div className="text-amber-900 font-semibold">
+                        <strong>🧩 字根：</strong>
+                        {kw.etymologyHint}
+                      </div>
+                      {kw.confusableNote && (
+                        <div className="text-rose-700 font-semibold">
+                          <strong>🔗 對照：</strong>
+                          {kw.confusableNote}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </motion.div>
         </div>

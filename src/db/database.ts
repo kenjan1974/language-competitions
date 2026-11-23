@@ -35,15 +35,9 @@ export async function initializeDatabase(): Promise<void> {
   initPromise = (async () => {
     await db.open();
 
-    // 1. 載入或同步完整種子題庫 (src/data/questions.json，共 3,457 題歷屆完整題庫：字音 1,710 題 + 字形 1,747 題)
+    // 1. 載入或同步完整種子題庫 (src/data/questions.json，共 3,457 題歷屆完整題庫：字音 1,710 題 + 字形 1,747 題，含教育部辭典釋義與字首字根拆解)
     const typedSeedQuestions = seedQuestions as QuestionItem[];
-    const existingCount = await db.questions.count();
-    if (existingCount < typedSeedQuestions.length) {
-      await db.questions.clear();
-      await db.questions.bulkPut(typedSeedQuestions);
-    } else {
-      await db.questions.bulkPut(typedSeedQuestions);
-    }
+    await db.questions.bulkPut(typedSeedQuestions);
 
     // 2. 初始化預設玩家資料（贈送 1 顆初始神秘蛋、100 金幣、5 株牧草）
     const existingProfile = await db.profile.get('default_player');

@@ -1,9 +1,15 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：**Phase 10、Phase 11、Phase 12、Phase 13 已完成**（重傷休養安全機制、10大世代62種奇獸、世代戰力階梯、12階段里程碑、十大世代圖鑑羈絆加成、重複卡星魂轉化與許願池、12大主題街機魔王與越級挑戰護盾＋我方小隊HP），準備執行 **Phase 14（教育部辭典對接與「字首字根拆解（形符＋聲符）」題庫知識擴充）**
+- **目前階段**：**V2 全方位進化（Phase 10 ～ Phase 15）已全數完成！**
+  - **Phase 10**：重傷休養安全機制（取代 `<20%` 永久刪除）、中途戰術安全撤退、永久圖鑑點亮、3卡槽副將協同加成、錯題本連對次數統一。
+  - **Phase 11**：擴充至 10 大世代共 62 種奇獸（完整覆蓋 0 ～ 3,457 題）、跨世代 `+12%/世代` 戰力階梯、12 大階段里程碑。
+  - **Phase 12**：10 大世代圖鑑羈絆加成（放倉庫亦永久生效）、重複奇獸轉化「🌟 奇獸星魂」與 100% 必出未收錄新品種的「🌠 星魂定向許願池」。
+  - **Phase 13**：12 大主題街機魔王（120 CP ～ 7,400 CP）、開放越級試打體驗護盾壓制（越級失敗免戰損）、我方小隊護盾 HP 血條與魔王主題弱點抽題。
+  - **Phase 14**：完成教育部《重編國語辭典修訂本》（萌典 Open Data）自動化對接與字首字根拆解（`scripts/enrich-questions.mjs` & `src/utils/wordKnowledge.ts`），為 3,457 題注入詞義、單字部首本義、典故出處、例句與一字多音家族對照，並全數修正 61 題樣板 `strokeHint`。
+  - **Phase 15**：完成「不死背」三層式語境學習 UI（字音關作答詞義膠囊＋答錯暫停看字根解析卡、字形關詞義與部首字根提示、結算畫面本局字詞知識回顧、錯題本展開字典釋義與同字多音家族）。
 - **最後更新時間**：2026-11-23
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 14` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：全數 V2 規劃階段（Phase 10 ~ Phase 15）皆已實作、驗證並提交 Git Commit。後續可直接啟動 `npm run dev` 供 iPad 實機遊玩，或使用 `npm run enrich-questions` / `npm run extract-pdf` 擴充新題庫。
 
 ---
 
@@ -59,27 +65,27 @@
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 14: 教育部辭典（萌典 Open Data）對接與「字首字根拆解（形符＋聲符）」題庫知識擴充
-- [ ] **Task 14.1: 擴充 `QuestionItem` 結構與內建字根/同字家族解析引擎 (`src/utils/wordKnowledge.ts`)**
+- [x] **Task 14.1: 擴充 `QuestionItem` 結構與內建字根/同字家族解析引擎 (`src/utils/wordKnowledge.ts`)**
   - 在 `src/types/game.ts` 新增 `meaning`、`charMeaning`、`etymologyHint`、`confusableNote`、`classicSource`、`exampleSentence` 欄位。
   - 建立 `src/utils/wordKnowledge.ts`：
     - 自動索引全題庫 3,457 題的「同字多音家族（一字多音對照）」與「同字多詞關聯」。
     - 內建常用部首意符（形符表義）與形聲字根拆解引擎，為所有題目即時提供「部首字首意義 ＋ 聲符讀音線索」。
-- [ ] **Task 14.2: 撰寫並執行教育部辭典（萌典 Moedict）自動化批次擴充腳本 (`scripts/enrich-questions.mjs`)**
-  - 撰寫 `scripts/enrich-questions.mjs`，針對 `src/data/questions.json` 的 3,457 題自動查詢教育部辭典開放資料，寫入標準詞義、目標字字義、典故出處與例句，並將 61 題制式樣板 `strokeHint` 全部替換為真實部首筆順與字根提示。
+- [x] **Task 14.2: 撰寫並執行教育部辭典（萌典 Moedict）自動化批次擴充腳本 (`scripts/enrich-questions.mjs`)**
+  - 撰寫 `scripts/enrich-questions.mjs`，針對 `src/data/questions.json` 的 3,457 題自動查詢教育部辭典開放資料，寫入標準詞義、目標字字義（命中 3,446 題單字部首釋義與 2,162+ 題詞義與典源出處），並將 61 題制式樣板 `strokeHint` 全部替換為真實部首筆順與字根提示。
   - 更新 `src/db/database.ts` 版本同步邏輯，確保舊存檔玩家載入時自動無損更新 3,457 題的豐富字典解釋（保留既有作答進度 `progress`）。
-- [ ] **Task 14.3: 驗證與 Git Commit**
+- [x] **Task 14.3: 驗證與 Git Commit**
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 15: 「不死背」三層式語境學習 UI（作答字義膠囊 ＋ 答錯暫停看字根解析卡 ＋ 結算回顧與同字家族）
-- [ ] **Task 15.1: 升級疾風字音陣 (`src/components/quiz/PronunciationStage.tsx`)**
+- [x] **Task 15.1: 升級疾風字音陣 (`src/components/quiz/PronunciationStage.tsx`)**
   - 作答後即時顯示「📖 詞義與目標字解釋膠囊」。
-  - **答錯或超時時暫停自動跳題**：展開「🧩 字根拆解 ＆ 同字多音對照卡」（顯示詞義、典故/例句、同一個字在不同詞語的讀音對照），由玩家點擊「💡 看懂了，下一題 ➔」再繼續。
-- [ ] **Task 15.2: 升級首領字形關 (`src/components/quiz/CharacterWritingStage.tsx`)**
-  - 在題目卡上方/下方顯示「📖 詞語意思」與「🧩 字首部首意符拆解」，讓學生先理解詞義與部首關聯再動筆書寫。
-- [ ] **Task 15.3: 升級結算回顧 (`src/App.tsx`) 與錯題本同字家族面板 (`src/components/ranch/MistakeNotebookModal.tsx`)**
-  - 在挑戰結算畫面新增「📜 本局字詞知識回顧清單」（可展開查看每題的詞義、字根拆解與同字家族）。
-  - 在錯題本每張題目卡新增「📖 展開字典釋義 ＆ 同字多音家族」功能。
-- [ ] **Task 15.4: 最終建置驗證與 Git Commit**
+  - **答錯或超時時暫停自動跳題**：展開「🧩 字根拆解 ＆ 同字多音對照卡」（顯示詞義、典故/例句、同一個字在不同詞語的讀音對照），由玩家點擊「💡 看懂字義與讀音了！繼續下一題 ➔」再繼續。
+- [x] **Task 15.2: 升級首領字形關 (`src/components/quiz/CharacterWritingStage.tsx`)**
+  - 在題目卡直接顯示「📖 詞語意思」、「🔤 單字本義」與「🧩 部首字根意符拆解」，讓學生先理解詞義與部首關聯再動筆書寫。
+- [x] **Task 15.3: 升級結算回顧 (`src/App.tsx`) 與錯題本同字家族面板 (`src/components/ranch/MistakeNotebookModal.tsx`)**
+  - 在挑戰結算畫面新增「📜 本局字詞知識回顧清單」（可一覽每題的詞義、單字本義、字根拆解與易混淆對照，並可直接點擊單題練寫）。
+  - 在錯題本每張題目卡新增「📖 展開字根與同字家族」面板，一次看清該目標字在歷屆題庫中的所有詞語與不同讀音對照。
+- [x] **Task 15.4: 最終建置驗證與 Git Commit**
   - 執行完整 `./node_modules/.bin/tsc --noEmit` 與建置測試，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ---
@@ -134,6 +140,19 @@
 
 ## AI Agent 交接日誌 (Handoff Log)
 > 每次 Agent 結束工作前，請在下方新增一筆紀錄（由新到舊排列）：
+
+### 2026-11-23 - V2 Full Evolution (Phase 10 ~ Phase 15: 10 Generations, Bestiary Bonds, Star Wish Pity, Boss 2.0 & Moedict Etymology System)
+- **完成任務**：
+  - **規劃與交接體系**：於 `SPEC.md` 與 `PROGRESS.md` 建立完整 V2 規格書與 Phase 10 ~ Phase 15 路線圖，每階段獨立驗證並提交 Git Commit。
+  - **Phase 10（戰損保護與協同）**：廢除 `<20%` 永久刪除奇獸，改為「🩹 重傷休養 (`isInjured`，答對 12 題或餵食 2 株牧草康復）」；新增中途「🏳️ 戰術安全撤退」避免誤觸戰損；新增 `unlockedSpeciesIds` 確保圖鑑永久點亮；實作 3 卡槽第 2、3 張副將協同加成（額外金幣與字音思考秒數）；統一錯題本連對 2 次解除常錯標籤。
+  - **Phase 11（10 大世代 62 種奇獸與世代戰力階梯）**：於 `src/data/beasts.ts` 新增第 6 世代（1300題・山海異獸）、第 7 世代（1650題・詩詞仙靈）、第 8 世代（2050題・甲骨聖殿）、第 9 世代（2500題・星河奧義）、第 10 世代（3000~3350題・萬字創世神），共 62 種奇獸；於 `src/data/bosses.ts` 實作 `+12% / 世代` 基礎戰力倍率與 12 大階段里程碑（完整覆蓋至 3,457 題 100% 制霸）。
+  - **Phase 12（圖鑑套卡羈絆與星魂保底許願池）**：實作 10 大世代圖鑑羈絆被動加成（集滿半數/全數永久加戰力、金幣與思考秒數，放倉庫亦生效）；於 `BeastStorageModal.tsx` 新增重複奇獸轉化「🌟 奇獸星魂 (`starDust`)」並自動保護每品種最強本尊；於 `RanchDashboard.tsx` 抽蛋屋新增第 4 池「🌠 星魂定向許願池（60 星魂 100% 必出未收錄新品種）」。
+  - **Phase 13（街機魔王戰 2.0）**：擴充至 12 大主題魔王（120 CP ～ 7,400 CP），開放已過前一關即可「⚡ 越級試打」（體驗魔王減傷護盾且失敗免戰損），新增我方卡組護盾 HP 血條與魔王反擊，並依魔王主題（平翹舌音、鼻音韻母、一字多音、形近字、高頻必考題）智慧抽題。
+  - **Phase 14 & 15（教育部辭典萌典對接、字首字根拆解與三層式不死背 UI）**：新增 `scripts/enrich-questions.mjs` 與 `src/utils/wordKnowledge.ts`，連線教育部《重編國語辭典修訂本》（萌典 Open Data）為 `src/data/questions.json` 3,457 題注入標準詞義、3,446 題單字部首釋義、典源出處與一字多音對照，並修復全部 61 題樣板 `strokeHint`；升級 `PronunciationStage.tsx`（答對顯示詞義膠囊、答錯暫停展開字根與多音對照卡）、`CharacterWritingStage.tsx`（顯示詞義與部首字根提示）、`App.tsx`（結算畫面本局字詞知識回顧）與 `MistakeNotebookModal.tsx`（展開同字多音家族對照）。
+- **新增/修改檔案**：
+  - 新增 `src/utils/wordKnowledge.ts`, `scripts/enrich-questions.mjs`
+  - 修改 `SPEC.md`, `PROGRESS.md`, `package.json`, `src/types/game.ts`, `src/db/database.ts`, `src/data/beasts.ts`, `src/data/bosses.ts`, `src/data/questions.json`, `src/utils/beastPerks.ts`, `src/services/quizEngine.ts`, `src/App.tsx`, `src/components/quiz/BossBattleBanner.tsx`, `src/components/quiz/PronunciationStage.tsx`, `src/components/quiz/CharacterWritingStage.tsx`, `src/components/quiz/ChallengeResultModal.tsx`, `src/components/ranch/RanchDashboard.tsx`, `src/components/ranch/BossArenaModal.tsx`, `src/components/ranch/BeastStorageModal.tsx`, `src/components/ranch/MistakeNotebookModal.tsx`
+- **目前系統狀態**：`./node_modules/.bin/tsc --noEmit` 零錯誤通過，所有既有存檔 100% 向下相容。
 
 ### 2026-11-20 - Hatched Beasts Sorting Toolbar Upgrade
 - **完成任務**：

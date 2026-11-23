@@ -15,10 +15,12 @@ import {
 } from 'lucide-react';
 import { QuestionItem } from '../../types/game';
 import { ActiveCompanionData } from '../../utils/beastPerks';
+import { getWordKnowledgeCard } from '../../utils/wordKnowledge';
 import { sound } from '../../utils/sound';
 
 interface CharacterWritingStageProps {
   questions: QuestionItem[];
+  allQuestions?: QuestionItem[];
   defaultMode: 'auto' | 'canvas_only';
   onQuestionResult: (questionId: string, isCorrect: boolean, peeked: boolean) => void;
   onStageComplete: () => void;
@@ -30,6 +32,7 @@ interface CharacterWritingStageProps {
 
 export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
   questions,
+  allQuestions,
   defaultMode,
   onQuestionResult,
   onStageComplete,
@@ -306,6 +309,11 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
 
   if (!currentQuestion) return null;
 
+  const knowledge = getWordKnowledgeCard(
+    currentQuestion,
+    allQuestions && allQuestions.length > 0 ? allQuestions : questions
+  );
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 flex flex-col gap-4 select-none">
       {/* 頂部首領關卡標題列 */}
@@ -410,13 +418,37 @@ export const CharacterWritingStage: React.FC<CharacterWritingStageProps> = ({
             })}
           </div>
 
-          {/* 易錯筆畫與字義提示 */}
-          {currentQuestion.strokeHint && (
-            <div className="mt-4 px-4 py-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>小提示：{currentQuestion.strokeHint}</span>
+          {/* 教育部辭典詞義解釋 ＋ 字首字根（形符＋聲符）提示卡 */}
+          <div className="mt-4 w-full max-w-xl rounded-2xl bg-amber-50/90 border-2 border-amber-200 p-3.5 text-left flex flex-col gap-1.5 shadow-sm">
+            {knowledge.wordMeaning && (
+              <div className="text-xs md:text-sm font-bold text-slate-800 flex items-start gap-1.5">
+                <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 font-black text-xs shrink-0">
+                  📖 詞語意思
+                </span>
+                <span>{knowledge.wordMeaning}</span>
+              </div>
+            )}
+            {knowledge.charMeaning && (
+              <div className="text-xs font-bold text-emerald-900 flex items-start gap-1.5">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-black text-xs shrink-0">
+                  🔤 單字本義
+                </span>
+                <span>{knowledge.charMeaning}</span>
+              </div>
+            )}
+            <div className="text-xs md:text-sm font-bold text-amber-950 flex items-start gap-1.5">
+              <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 font-black text-xs shrink-0 flex items-center gap-1">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-700" />
+                🧩 部首字根
+              </span>
+              <span>{knowledge.etymologyHint}</span>
             </div>
-          )}
+            {knowledge.classicSource && (
+              <div className="text-[11px] font-semibold text-slate-500 pl-1">
+                📜 典故出處：{knowledge.classicSource}
+              </div>
+            )}
+          </div>
         </div>
 
         {fallbackNotice && (

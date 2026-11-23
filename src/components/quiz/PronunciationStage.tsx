@@ -7,14 +7,18 @@ import {
   CheckCircle2,
   XCircle,
   Sparkles,
-  Shield
+  Shield,
+  BookOpen,
+  ArrowRight
 } from 'lucide-react';
 import { QuestionItem } from '../../types/game';
 import { ActiveCompanionData } from '../../utils/beastPerks';
+import { getWordKnowledgeCard } from '../../utils/wordKnowledge';
 import { sound } from '../../utils/sound';
 
 interface PronunciationStageProps {
   questions: QuestionItem[];
+  allQuestions?: QuestionItem[];
   onQuestionResult: (questionId: string, isCorrect: boolean, isFast: boolean) => void;
   onStageComplete: () => void;
   combo: number;
@@ -27,6 +31,7 @@ const BASE_QUESTION_TIME_LIMIT = 10; // 每題基礎限時 10 秒
 
 export const PronunciationStage: React.FC<PronunciationStageProps> = ({
   questions,
+  allQuestions,
   onQuestionResult,
   onStageComplete,
   combo,
@@ -75,10 +80,7 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
     setFeedback('timeout');
     sound.playWrong();
     onQuestionResult(currentQuestion.id, false, false);
-
-    setTimeout(() => {
-      advanceNext();
-    }, 1500);
+    // 超時不自動跳走，停留在字根與詞義解析卡讓學生看懂後手動點下一題！
   };
 
   const handleSelectOption = (option: string) => {
@@ -101,9 +103,13 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
 
     onQuestionResult(currentQuestion.id, isCorrect, isCorrect && isFast);
 
-    setTimeout(() => {
-      advanceNext();
-    }, isCorrect ? 950 : 1600);
+    if (isCorrect) {
+      // 答對時顯示一行詞義膠囊，1.35 秒後自動流暢進入下一題
+      setTimeout(() => {
+        advanceNext();
+      }, 1350);
+    }
+    // 答錯時不強制 1.6 秒跳走，展開教育部辭典與字根記憶卡，由學生點擊「看懂了，下一題」繼續！
   };
 
   const advanceNext = () => {
@@ -120,6 +126,10 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
 
   const timePercent = Math.max(0, Math.min(100, (timeLeft / effectiveTimeLimit) * 100));
   const options = currentQuestion.options || [currentQuestion.targetZhuyin];
+  const knowledge = getWordKnowledgeCard(
+    currentQuestion,
+    allQuestions && allQuestions.length > 0 ? allQuestions : questions
+  );
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 flex flex-col gap-4 select-none">
@@ -265,34 +275,102 @@ export const PronunciationStage: React.FC<PronunciationStageProps> = ({
           })}
         </div>
 
-        {/* 作答即時視覺回饋提示 */}
+        {/* 作答即時視覺回饋與「字首字根 / 教育部辭典釋義」知識卡 */}
         <AnimatePresence>
           {feedback && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className={`mt-4 px-5 py-2 rounded-full font-bold text-base flex items-center gap-2 ${
+              className={`mt-4 w-full rounded-2xl p-4 border-2 text-left flex flex-col gap-2 ${
                 feedback === 'correct'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-rose-100 text-rose-800'
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                  : 'bg-rose-50 border-rose-300 text-rose-950 shadow-md'
               }`}
             >
-              {feedback === 'correct' ? (
-                <>
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  <span>太棒了！標準讀音正是「{currentQuestion.targetZhuyin}」！</span>
-                </>
-              ) : feedback === 'timeout' ? (
-                <>
-                  <XCircle className="w-5 h-5 text-rose-600" />
-                  <span>時間到！正確讀音為「{currentQuestion.targetZhuyin}」</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-5 h-5 text-rose-600" />
-                  <span>差一點點！「{currentQuestion.targetChar}」的正確讀音是「{currentQuestion.targetZhuyin}」</span>
-                </>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 font-extrabold text-base">
+                  {feedback === 'correct' ? (
+                    <>
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <span>
+                        太棒了！「{currentQuestion.targetChar}」標準讀音正是【{currentQuestion.targetZhuyin}】！
+                      </span>
+                    </>
+                  ) : feedback === 'timeout' ? (
+                    <>
+                      <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                      <span>
+                        ⏰ 時間到！「{currentQuestion.targetChar}」的正確讀音為【{currentQuestion.targetZhuyin}】
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                      <span>
+                        💡 記起來！「{currentQuestion.targetChar}」在「{currentQuestion.fullWord}」讀作【{currentQuestion.targetZhuyin}】
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* 教育部辭典詞義與單字字義 */}
+              {(knowledge.wordMeaning || knowledge.charMeaning) && (
+                <div className="text-xs md:text-sm font-bold text-slate-800 bg-white/85 px-3 py-2 rounded-xl border border-black/5 flex flex-col gap-1">
+                  {knowledge.wordMeaning && (
+                    <div>
+                      <span className="text-indigo-700 font-black">📖 詞語解釋：</span>
+                      <span>{knowledge.wordMeaning}</span>
+                    </div>
+                  )}
+                  {knowledge.charMeaning && (
+                    <div>
+                      <span className="text-emerald-700 font-black">
+                        🔤 「{currentQuestion.targetChar} ({currentQuestion.targetZhuyin})」字義：
+                      </span>
+                      <span>{knowledge.charMeaning}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 字首部首／形聲拆解 & 一字多音語境對照（答錯時完整展開幫助記憶） */}
+              {(feedback !== 'correct' || (!knowledge.wordMeaning && !knowledge.charMeaning)) && (
+                <div className="text-xs font-bold text-slate-700 bg-amber-50/90 px-3 py-2 rounded-xl border border-amber-200 flex flex-col gap-1">
+                  <div>
+                    <span className="text-amber-800 font-black">🧩 字首字根拆解：</span>
+                    <span>{knowledge.etymologyHint}</span>
+                  </div>
+                  {knowledge.confusableNote && (
+                    <div className="text-rose-800">
+                      <span className="font-black">🔗 易混淆／多音對照：</span>
+                      <span>{knowledge.confusableNote}</span>
+                    </div>
+                  )}
+                  {knowledge.classicSource && (
+                    <div className="text-slate-500">
+                      <span className="font-black">📜 典源出處：</span>
+                      <span>{knowledge.classicSource}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 答錯或超時時：由學生看懂解析後點擊按鈕進入下一題 */}
+              {feedback !== 'correct' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playClick();
+                    advanceNext();
+                  }}
+                  className="mt-1 w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-black text-sm shadow flex items-center justify-center gap-1.5 active:scale-95 transition"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>💡 看懂字義與讀音了！繼續下一題</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               )}
             </motion.div>
           )}

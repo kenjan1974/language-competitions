@@ -25,9 +25,34 @@ export const GENERATION_META: Record<
     badgeClass: 'bg-amber-100 text-amber-900 border-amber-300'
   },
   5: {
-    title: '第 5 世代・神話創世 (750~1000題解鎖)',
+    title: '第 5 世代・四象神話 (750~1000題解鎖)',
     unlockMasteredCount: 750,
     badgeClass: 'bg-rose-100 text-rose-800 border-rose-300'
+  },
+  6: {
+    title: '第 6 世代・山海異獸 (1300題解鎖)',
+    unlockMasteredCount: 1300,
+    badgeClass: 'bg-teal-100 text-teal-800 border-teal-300'
+  },
+  7: {
+    title: '第 7 世代・詩詞仙靈 (1650題解鎖)',
+    unlockMasteredCount: 1650,
+    badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+  },
+  8: {
+    title: '第 8 世代・甲骨聖殿 (2050題解鎖)',
+    unlockMasteredCount: 2050,
+    badgeClass: 'bg-orange-100 text-orange-900 border-orange-300'
+  },
+  9: {
+    title: '第 9 世代・星河奧義 (2500題解鎖)',
+    unlockMasteredCount: 2500,
+    badgeClass: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300'
+  },
+  10: {
+    title: '第 10 世代・萬字創世 (3000~3300題解鎖)',
+    unlockMasteredCount: 3000,
+    badgeClass: 'bg-yellow-100 text-yellow-900 border-yellow-400'
   }
 };
 
@@ -530,6 +555,476 @@ export const BEAST_SPECIES_LIST: BeastSpecies[] = [
       adult: { name: '陰陽兩儀聖龍', emoji: '🐉☯️', description: '盤旋於日月星辰之間，將三千道考古題化為自身無上神力。', expRequired: 320 },
       awakened: { name: '創世太初萬字祖龍皇', emoji: '👑🐉🏆', description: '字音字形奇幻牧場的終極神話祖龍！唯有突破千題的傳奇牧場主方能擁有！' }
     }
+  },
+
+  // ==========================================
+  // 第 6 世代：山海異獸（通過 1,300 題解鎖，共 6 種）
+  // ==========================================
+  {
+    speciesId: 'baize_sage',
+    rarity: 'SR',
+    element: 'light',
+    generation: 6,
+    unlockMasteredCount: 1300,
+    eggName: '昆侖白澤瑞蛋',
+    eggStepsRequired: 26,
+    themeColor: '#0284c7',
+    stages: {
+      baby: { name: '雪絨小白澤', emoji: '🐐✨', description: '通曉天下萬物名字的祥瑞幼獸，最愛聽小主人朗讀古文。', expRequired: 100 },
+      adult: { name: '昆侖瑞白澤', emoji: '🦄📖', description: '能口吐人言、辨識世間一切生僻字與異體字。', expRequired: 220 },
+      awakened: { name: '萬象通明聖白澤', emoji: '👑🦄📜', description: '《山海經》中通曉萬物精怪與天下字書的至高瑞獸！' }
+    }
+  },
+  {
+    speciesId: 'kui_thunder_ox',
+    rarity: 'SR',
+    element: 'water',
+    generation: 6,
+    unlockMasteredCount: 1300,
+    eggName: '雷澤夔牛戰鼓蛋',
+    eggStepsRequired: 26,
+    themeColor: '#0369a1',
+    stages: {
+      baby: { name: '獨角小雷牛', emoji: '🐮⚡', description: '住在東海流波山的小神牛，叫聲像打雷一樣精神抖擻。', expRequired: 100 },
+      adult: { name: '雷澤鎮海夔', emoji: '🐃🌊', description: '出入海水必有風雨，吼聲能震碎一切模糊字音。', expRequired: 220 },
+      awakened: { name: '軒轅雷霆戰鼓夔皇', emoji: '👑🐃⚡', description: '黃帝曾以牠的靈威化為雷霆戰鼓，助你考場聲震四方！' }
+    }
+  },
+  {
+    speciesId: 'qingqiu_celestial_fox',
+    rarity: 'SR',
+    element: 'fire',
+    generation: 6,
+    unlockMasteredCount: 1300,
+    eggName: '青丘紫焰狐蛋',
+    eggStepsRequired: 28,
+    themeColor: '#e11d48',
+    stages: {
+      baby: { name: '青丘小靈狐', emoji: '🦊🌸', description: '來自青丘仙山的六尾小狐，最擅長分辨形近字的細微差異。', expRequired: 105 },
+      adult: { name: '紫焰天狐仙', emoji: '🦊🔥', description: '搖動狐尾便能喚出滿天火蓮，焚盡考卷上所有錯字陷阱。', expRequired: 230 },
+      awakened: { name: '青丘女帝・九尾仙狐皇', emoji: '👑🦊🌺', description: '統領青丘山海奇獸的仙狐女帝，賜予超凡脫俗的語文直覺！' }
+    }
+  },
+  {
+    speciesId: 'yaochi_bluebird',
+    rarity: 'SR',
+    element: 'wood',
+    generation: 6,
+    unlockMasteredCount: 1300,
+    eggName: '瑤池翠玉羽蛋',
+    eggStepsRequired: 28,
+    themeColor: '#0d9488',
+    stages: {
+      baby: { name: '翠玉小青鳥', emoji: '🐦🌿', description: '西王母身邊報信的小信使，嘴裡常叼著寫滿成語的玉簡。', expRequired: 105 },
+      adult: { name: '瑤池三足青鸞', emoji: '🦅💚', description: '穿梭於昆侖瑤池與人間書院，為勤學者帶來豐盛靈草。', expRequired: 230 },
+      awakened: { name: '蓬萊仙使・碧落青鸞皇', emoji: '👑🦚🌿', description: '翱翔於三山五嶽的瑤池仙鳥，讓你的詞彙量如仙境般遼闊！' }
+    }
+  },
+  {
+    speciesId: 'zhulong_torch_dragon',
+    rarity: 'SSR',
+    element: 'fire',
+    generation: 6,
+    unlockMasteredCount: 1300,
+    eggName: '鍾山燭陰神蛋',
+    eggStepsRequired: 36,
+    themeColor: '#b91c1c',
+    stages: {
+      baby: { name: '赤瞳小燭龍', emoji: '🐲☀️', description: '睜開眼睛就是白晝、閉上眼睛就是黑夜的《山海經》小神龍。', expRequired: 135 },
+      adult: { name: '鍾山赤焰燭陰', emoji: '🐉🔥', description: '吹氣為冬、呼氣為夏，掌握四季更迭與文字演變的太古法則。', expRequired: 290 },
+      awakened: { name: '山海古神・燭九陰真龍', emoji: '👑🐉☀️', description: '照亮《山海經》無盡幽暗的創世古神，任何生僻冷字在神瞳下一覽無遺！' }
+    }
+  },
+  {
+    speciesId: 'dijiang_chaos_wing',
+    rarity: 'SSR',
+    element: 'star',
+    generation: 6,
+    unlockMasteredCount: 1300,
+    eggName: '天山六翼神蛋',
+    eggStepsRequired: 36,
+    themeColor: '#7e22ce',
+    stages: {
+      baby: { name: '紅綾小帝江', emoji: '🐣🪽', description: '圓滾滾如赤紅丹囊、長著六隻小翅膀，最喜歡隨詩歌節奏跳舞。', expRequired: 135 },
+      adult: { name: '天山歌舞神獸', emoji: '🦅🌌', description: '通曉音律與平仄聲韻的太古空間神獸，速度超越光影。', expRequired: 290 },
+      awakened: { name: '山海空間神・六翼帝江皇', emoji: '👑🦅🪐', description: '掌管天山音律與空間的六翼古神，助你在疾風字音陣中百發百中！' }
+    }
+  },
+
+  // ==========================================
+  // 第 7 世代：詩詞仙靈（通過 1,650 題解鎖，共 6 種）
+  // ==========================================
+  {
+    speciesId: 'taibai_sword_crane',
+    rarity: 'SR',
+    element: 'light',
+    generation: 7,
+    unlockMasteredCount: 1650,
+    eggName: '青蓮劍氣仙蛋',
+    eggStepsRequired: 28,
+    themeColor: '#0284c7',
+    stages: {
+      baby: { name: '太白小仙鶴', emoji: '🦢🍶', description: '伴隨詩仙李白吟詩作對的小白鶴，一步一劍氣、一字一珠璣。', expRequired: 110 },
+      adult: { name: '青蓮御劍仙鶴', emoji: '🦢⚔️', description: '展翅直上青天攬明月，劍氣所指之處一切錯別字迎刃而解。', expRequired: 240 },
+      awakened: { name: '詩仙化身・太白凌霄劍鶴', emoji: '👑🦢🌕', description: '融合盛唐詩仙豪情與無雙劍意的神聖仙靈！' }
+    }
+  },
+  {
+    speciesId: 'dongpo_ink_dragon',
+    rarity: 'SR',
+    element: 'wood',
+    generation: 7,
+    unlockMasteredCount: 1650,
+    eggName: '東坡墨竹靈蛋',
+    eggStepsRequired: 28,
+    themeColor: '#15803d',
+    stages: {
+      baby: { name: '定風波小竹龍', emoji: '🐲🎋', description: '披著竹葉蓑衣的小墨龍，不論考題多難都能吟嘯且徐行。', expRequired: 110 },
+      adult: { name: '赤壁墨韻書龍', emoji: '🐉🖌️', description: '筆力驚濤拍岸、捲起千堆雪，將宋詞之美化為磅礡戰力。', expRequired: 240 },
+      awakened: { name: '千古詞宗・東坡翰墨聖龍', emoji: '👑🐉🎋', description: '匯聚蘇東坡詩詞書畫三絕靈氣的文豪神獸！' }
+    }
+  },
+  {
+    speciesId: 'yian_begonia_phoenix',
+    rarity: 'SR',
+    element: 'fire',
+    generation: 7,
+    unlockMasteredCount: 1650,
+    eggName: '漱玉海棠香蛋',
+    eggStepsRequired: 28,
+    themeColor: '#db2777',
+    stages: {
+      baby: { name: '海棠小詞雀', emoji: '🐦🌺', description: '綠肥紅瘦之間翩翩起舞的小靈鳥，對字詞平仄最為敏銳。', expRequired: 110 },
+      adult: { name: '漱玉流光彩鳳', emoji: '🦚🌺', description: '羽翼間流轉著婉約清麗的宋詞光華，能看穿一切字音陷阱。', expRequired: 240 },
+      awakened: { name: '千古才女・易安漱玉神凰', emoji: '👑🦚🌸', description: '象徵至高古典文學素養的詞宗神凰！' }
+    }
+  },
+  {
+    speciesId: 'mojie_zen_deer',
+    rarity: 'SR',
+    element: 'water',
+    generation: 7,
+    unlockMasteredCount: 1650,
+    eggName: '空山松月靈蛋',
+    eggStepsRequired: 28,
+    themeColor: '#0d9488',
+    stages: {
+      baby: { name: '松間小泉鹿', emoji: '🦌💧', description: '明月松間照、清泉石上流，在寧靜山林中孕育的空靈小鹿。', expRequired: 110 },
+      adult: { name: '輞川詩畫仙鹿', emoji: '🦌🌙', description: '詩中有畫、畫中有詩，能為小主人大幅延長字音思考時間。', expRequired: 240 },
+      awakened: { name: '詩佛禪心・摩詰空山聖鹿', emoji: '👑🦌🏞️', description: '凝聚王維山水詩境的自然聖獸，讓考場心境澄澈如明鏡！' }
+    }
+  },
+  {
+    speciesId: 'zimei_autumn_roc',
+    rarity: 'SSR',
+    element: 'star',
+    generation: 7,
+    unlockMasteredCount: 1650,
+    eggName: '杜陵秋興聖蛋',
+    eggStepsRequired: 38,
+    themeColor: '#4338ca',
+    stages: {
+      baby: { name: '望岳小雲鵬', emoji: '🦅⛰️', description: '立志會當凌絕頂、一覽眾山小的堅毅幼鵬。', expRequired: 140 },
+      adult: { name: '筆落驚風雨神鵬', emoji: '🦅⛈️', description: '讀書破萬卷、下筆如有神，每一擊都蘊含千鈞詩史之力。', expRequired: 300 },
+      awakened: { name: '詩聖至尊・子美凌雲天鵬', emoji: '👑🦅🌌', description: '突破 1,650 題解鎖的詩聖神獸，助你讀破萬卷、下筆滿分！' }
+    }
+  },
+  {
+    speciesId: 'jiaxuan_cavalry_lion',
+    rarity: 'SSR',
+    element: 'fire',
+    generation: 7,
+    unlockMasteredCount: 1650,
+    eggName: '破陣子金戈神蛋',
+    eggStepsRequired: 38,
+    themeColor: '#c2410c',
+    stages: {
+      baby: { name: '金戈小鐵獅', emoji: '🦁🗡️', description: '醉裡挑燈看劍的小戰獅，面對強敵魔王毫不畏懼。', expRequired: 140 },
+      adult: { name: '氣吞萬里狂獅', emoji: '🦁🔥', description: '金戈鐵馬、氣吞萬里如虎，專破高階魔王的厚重裝甲！', expRequired: 300 },
+      awakened: { name: '詞中之龍・稼軒破陣神獅皇', emoji: '👑🦁⚔️', description: '眾裡尋他千百度、橫掃沙場無敵手的豪放派至高戰神獸！' }
+    }
+  },
+
+  // ==========================================
+  // 第 8 世代：甲骨聖殿（通過 2,050 題解鎖，共 6 種）
+  // ==========================================
+  {
+    speciesId: 'yinxu_oracle_swallow',
+    rarity: 'SR',
+    element: 'light',
+    generation: 8,
+    unlockMasteredCount: 2050,
+    eggName: '殷墟甲骨玄鳥蛋',
+    eggStepsRequired: 30,
+    themeColor: '#b45309',
+    stages: {
+      baby: { name: '甲骨小玄鳥', emoji: '🐦📜', description: '天命玄鳥、降而生商，羽翼上刻著最古老的象形文字。', expRequired: 115 },
+      adult: { name: '殷商刻辭神燕', emoji: '🦅✨', description: '能將任何複雜國字瞬間拆解回甲骨文字根，讓人一眼記住！', expRequired: 250 },
+      awakened: { name: '漢字之源・殷墟天命玄鳥皇', emoji: '👑🦅☀️', description: '見證三千年前甲骨文誕生的神聖玄鳥，掌握一切字形本源！' }
+    }
+  },
+  {
+    speciesId: 'bronze_ding_behemoth',
+    rarity: 'SR',
+    element: 'fire',
+    generation: 8,
+    unlockMasteredCount: 2050,
+    eggName: '后母戊青銅鼎蛋',
+    eggStepsRequired: 30,
+    themeColor: '#9a3412',
+    stages: {
+      baby: { name: '青銅小鼎獸', emoji: '🐗🏺', description: '身上鑄滿鐘鼎金文的小神獸，力氣大得能舉起整座書山。', expRequired: 115 },
+      adult: { name: '饕餮金文重甲獸', emoji: '🦏🔥', description: '一言九鼎、穩如泰山，為小主人提供堅不可摧的連擊護盾。', expRequired: 250 },
+      awakened: { name: '鎮國重器・九鼎金文聖尊獸', emoji: '👑🦏🏺', description: '銘刻商周青銅金文之魂的鎮國神獸，戰力厚重無雙！' }
+    }
+  },
+  {
+    speciesId: 'bamboo_slip_tortoise',
+    rarity: 'SR',
+    element: 'wood',
+    generation: 8,
+    unlockMasteredCount: 2050,
+    eggName: '春秋竹簡靈龜蛋',
+    eggStepsRequired: 30,
+    themeColor: '#166534',
+    stages: {
+      baby: { name: '韋編小書龜', emoji: '🐢🎋', description: '背上背著一綑綑春秋竹簡，勤奮到韋編三絕也不喊累。', expRequired: 115 },
+      adult: { name: '杏壇夫子賢龜', emoji: '🐢📚', description: '精通六藝與六書造字法則（象形、指事、會意、形聲、轉注、假借）。', expRequired: 250 },
+      awakened: { name: '六書宗師・萬世竹簡玄武尊', emoji: '👑🐢📜', description: '將許慎《說文解字》九千字盡數銘刻於靈甲之上的字學聖獸！' }
+    }
+  },
+  {
+    speciesId: 'lanting_calligraphy_goose',
+    rarity: 'SR',
+    element: 'water',
+    generation: 8,
+    unlockMasteredCount: 2050,
+    eggName: '蘭亭曲水墨鵝蛋',
+    eggStepsRequired: 30,
+    themeColor: '#0369a1',
+    stages: {
+      baby: { name: '會稽小墨鵝', emoji: '🪿🖌️', description: '書聖王羲之最喜愛的小白鵝，脖頸彎曲的弧度就是最標準的筆法。', expRequired: 115 },
+      adult: { name: '曲水流觴書聖鵝', emoji: '🦢🌊', description: '游過曲水便能化出《蘭亭集序》天下第一行書的絕妙筆意。', expRequired: 250 },
+      awakened: { name: '書聖傳承・蘭亭游龍神鵝皇', emoji: '👑🦢🖋️', description: '翩若驚鴻、矯若游龍，助你在字形手寫關中筆筆皆成藝術！' }
+    }
+  },
+  {
+    speciesId: 'dunhuang_apsaras_qilin',
+    rarity: 'SSR',
+    element: 'light',
+    generation: 8,
+    unlockMasteredCount: 2050,
+    eggName: '莫高窟飛天瑞蛋',
+    eggStepsRequired: 38,
+    themeColor: '#d97706',
+    stages: {
+      baby: { name: '鳴沙小瑞麟', emoji: '🦌🧣', description: '披著敦煌七彩飛天飄帶的小瑞獸，腳步輕盈如踏祥雲。', expRequired: 145 },
+      adult: { name: '莫高梵音飛天麟', emoji: '🦄✨', description: '守護藏經洞數萬卷古籍遺書，散發跨越千年的文化聖光。', expRequired: 310 },
+      awakened: { name: '絲路聖靈・敦煌九色飛天麒麟', emoji: '👑🦄🌈', description: '突破 2,050 題解鎖的絲路文化守護神，擁有極致的聖光庇護！' }
+    }
+  },
+  {
+    speciesId: 'qin_seal_jade_dragon',
+    rarity: 'SSR',
+    element: 'star',
+    generation: 8,
+    unlockMasteredCount: 2050,
+    eggName: '書同文傳國玉璽蛋',
+    eggStepsRequired: 40,
+    themeColor: '#4f46e5',
+    stages: {
+      baby: { name: '小篆玉蟠龍', emoji: '🐲💎', description: '盤踞在和氏璧玉璽上的小玉龍，最愛整齊對稱的小篆字體。', expRequired: 145 },
+      adult: { name: '書同文天璽蒼龍', emoji: '🐉💠', description: '一統六國文字、定下標準正體字規矩的威嚴玉龍。', expRequired: 315 },
+      awakened: { name: '萬世正字・傳國玉璽至尊龍皇', emoji: '👑🐉💎', description: '鎮守「甲骨聖殿」的最高主宰，象徵對標準國字結構的絕對統御！' }
+    }
+  },
+
+  // ==========================================
+  // 第 9 世代：星河奧義（通過 2,500 題解鎖，共 6 種）
+  // ==========================================
+  {
+    speciesId: 'big_dipper_star_wolf',
+    rarity: 'SR',
+    element: 'star',
+    generation: 9,
+    unlockMasteredCount: 2500,
+    eggName: '北斗七星天樞蛋',
+    eggStepsRequired: 32,
+    themeColor: '#6366f1',
+    stages: {
+      baby: { name: '天樞小星狼', emoji: '🐺⭐', description: '額頭鑲嵌著北斗七星印記，能在茫茫題海中為小主人指引方向。', expRequired: 120 },
+      adult: { name: '北斗瑤光破陣狼', emoji: '🐺🌌', description: '踏罡步斗、引動北極星力，每次出擊皆帶起璀璨星暴。', expRequired: 265 },
+      awakened: { name: '北極星主・七星天罡貪狼神皇', emoji: '👑🐺🌠', description: '統領北方星宿的星河戰神，為牧場帶來源源不絕的璀璨寶石！' }
+    }
+  },
+  {
+    speciesId: 'lunar_jade_rabbit',
+    rarity: 'SR',
+    element: 'water',
+    generation: 9,
+    unlockMasteredCount: 2500,
+    eggName: '太陰廣寒月華蛋',
+    eggStepsRequired: 32,
+    themeColor: '#0284c7',
+    stages: {
+      baby: { name: '廣寒搗藥兔', emoji: '🐰🌙', description: '在月宮桂花樹下不搗仙藥、專門把易錯字音搗碎重煉的小玉兔。', expRequired: 120 },
+      adult: { name: '太陰月華靈兔', emoji: '🐇❄️', description: '沐浴皎潔月光，能讓疾風字音陣的時間流速彷彿慢下來。', expRequired: 265 },
+      awakened: { name: '月宮仙尊・太陰望舒玉兔皇', emoji: '👑🐇🌕', description: '掌管太陰星辰與靜水凝神奧義的月宮至尊神獸！' }
+    }
+  },
+  {
+    speciesId: 'weaver_galaxy_magpie',
+    rarity: 'SR',
+    element: 'wood',
+    generation: 9,
+    unlockMasteredCount: 2500,
+    eggName: '銀漢鵲橋仙羽蛋',
+    eggStepsRequired: 32,
+    themeColor: '#059669',
+    stages: {
+      baby: { name: '星橋小喜鵲', emoji: '🐦🌌', description: '每逢佳節便飛上銀河搭橋報喜，最喜歡收集成語典故。', expRequired: 120 },
+      adult: { name: '雲錦天衣仙鵲', emoji: '🦅✨', description: '以星光為線、字句為梭，織出錦繡文章與滿分考卷。', expRequired: 265 },
+      awakened: { name: '銀漢星靈・天河織錦神鵲皇', emoji: '👑🦚🌌', description: '連結星河萬千詞彙的祥瑞神鳥，讓所有冷僻成語化為常識！' }
+    }
+  },
+  {
+    speciesId: 'sirius_pojun_tiger',
+    rarity: 'SSR',
+    element: 'light',
+    generation: 9,
+    unlockMasteredCount: 2500,
+    eggName: '天狼破軍星芒蛋',
+    eggStepsRequired: 40,
+    themeColor: '#eab308',
+    stages: {
+      baby: { name: '天狼小星虎', emoji: '🐯🌟', description: '全天最亮恆星「天狼星」化生的幼虎，雙眸閃耀白金光芒。', expRequired: 150 },
+      adult: { name: '破軍星芒戰虎', emoji: '🐯⚡', description: '會挽雕弓如滿月、西北望射天狼，擁有極致的破防爆發力！', expRequired: 325 },
+      awakened: { name: '星河戰神・天狼破軍聖虎皇', emoji: '👑🐯🌠', description: '突破 2,500 題大關的星河戰神，在魔王機台戰中展現毀天滅地的聖光爆擊！' }
+    }
+  },
+  {
+    speciesId: 'solar_golden_crow',
+    rarity: 'SSR',
+    element: 'fire',
+    generation: 9,
+    unlockMasteredCount: 2500,
+    eggName: '扶桑三足金烏蛋',
+    eggStepsRequired: 40,
+    themeColor: '#dc2626',
+    stages: {
+      baby: { name: '扶桑小金烏', emoji: '🐤☀️', description: '棲息在東海扶桑神木頂端的小太陽鳥，全身暖洋洋的。', expRequired: 150 },
+      adult: { name: '曜日三足金烏', emoji: '🦅🔥', description: '展翅即化為煌煌烈日，為全牧場帶來最高倍率的金幣豐收！', expRequired: 325 },
+      awakened: { name: '太陽星君・大日如來金烏帝皇', emoji: '👑🦅☀️', description: '統御十方烈日與純陽真火的至高太陽星神！' }
+    }
+  },
+  {
+    speciesId: 'ziwei_emperor_dragon',
+    rarity: 'SSR',
+    element: 'star',
+    generation: 9,
+    unlockMasteredCount: 2500,
+    eggName: '紫微帝星紫金蛋',
+    eggStepsRequired: 42,
+    themeColor: '#7c3aed',
+    stages: {
+      baby: { name: '紫微星垣幼龍', emoji: '🐲🔮', description: '誕生於紫微垣帝星之畔，天生散發統御群星的尊貴氣場。', expRequired: 155 },
+      adult: { name: '北極紫微星皇龍', emoji: '🐉🌌', description: '萬星朝宗、斗數之主，能將小主人的全隊卡匣戰力推向巔峰。', expRequired: 335 },
+      awakened: { name: '中天星主・紫微北極大帝聖龍', emoji: '👑🐉🪐', description: '鎮守 2,500 題星河奧義殿堂的至高帝星神龍！' }
+    }
+  },
+
+  // ==========================================
+  // 第 10 世代：萬字創世（通過 3,000 ~ 3,300 題解鎖，共 6 種）
+  // ==========================================
+  {
+    speciesId: 'kuixing_scholar_qilin',
+    rarity: 'SSR',
+    element: 'fire',
+    generation: 10,
+    unlockMasteredCount: 3000,
+    eggName: '魁星點斗狀元神蛋',
+    eggStepsRequired: 42,
+    themeColor: '#e11d48',
+    stages: {
+      baby: { name: '狀元硃砂小麒', emoji: '🦌🖊️', description: '手持小小硃砂筆的瑞獸，被牠點到的題目都會變成必拿分題！', expRequired: 160 },
+      adult: { name: '魁星點斗瑞麒麟', emoji: '🦄🔥', description: '獨占鰲頭、金榜題名，專屬於突破 3,000 題大宗師的狀元守護神！', expRequired: 340 },
+      awakened: { name: '獨占鰲頭・魁星點斗狀元聖麒皇', emoji: '👑🦄🏆', description: '魁星踢斗、文運昌隆！庇佑小主人在全國語文競賽與會考學測一舉奪魁！' }
+    }
+  },
+  {
+    speciesId: 'wenchang_emperor_lion',
+    rarity: 'SSR',
+    element: 'light',
+    generation: 10,
+    unlockMasteredCount: 3000,
+    eggName: '文昌梓潼天祿神蛋',
+    eggStepsRequired: 42,
+    themeColor: '#d97706',
+    stages: {
+      baby: { name: '天祿小書獅', emoji: '🦁📜', description: '文昌帝君座下的天祿瑞獸，最欣賞堅持刷完三千題的毅力。', expRequired: 160 },
+      adult: { name: '文昌桂籍神獸', emoji: '🦁✨', description: '掌管天下文人學子功名祿位，賦予無堅不摧的聖光護盾。', expRequired: 340 },
+      awakened: { name: '文運主宰・文昌帝君天祿聖尊', emoji: '👑🦁🌟', description: '突破 3,000 題解鎖的文昌聖獸，象徵學識淵博、金榜題名！' }
+    }
+  },
+  {
+    speciesId: 'tiandao_archive_xuanwu',
+    rarity: 'SSR',
+    element: 'water',
+    generation: 10,
+    unlockMasteredCount: 3000,
+    eggName: '萬卷天道玄武神蛋',
+    eggStepsRequired: 42,
+    themeColor: '#0284c7',
+    stages: {
+      baby: { name: '瀚海藏書幼龜', emoji: '🐢🌊', description: '龜甲如同一座無邊無際的數位辭典，收錄了教育部所有標準字音。', expRequired: 160 },
+      adult: { name: '四庫全書玄武皇', emoji: '🐢💎', description: '通貫經、史、子、集四部典籍，任何冷僻古語皆能追本溯源。', expRequired: 340 },
+      awakened: { name: '萬卷天道・翰海辭源玄武大帝', emoji: '👑🐢🌌', description: '承載三千四百道歷屆題庫與教育部辭典本源的至高水系神明！' }
+    }
+  },
+  {
+    speciesId: 'huaxia_primordial_phoenix',
+    rarity: 'SSR',
+    element: 'wood',
+    generation: 10,
+    unlockMasteredCount: 3150,
+    eggName: '五千年華夏祖鳳蛋',
+    eggStepsRequired: 44,
+    themeColor: '#059669',
+    stages: {
+      baby: { name: '華夏青玉鳳雛', emoji: '🐦💚', description: '在五千年文化長河中誕生的不朽鳳雛，鳴聲如編鐘般清越。', expRequired: 165 },
+      adult: { name: '禮樂春秋神凰', emoji: '🦚🌿', description: '見證詩經、楚辭、漢賦、唐詩、宋詞的千年傳承。', expRequired: 350 },
+      awakened: { name: '五千年文脈・華夏不朽元祖聖凰', emoji: '👑🦚🌳', description: '突破 3,150 題解鎖的元祖聖凰，生生不息孕育無窮語文智慧！' }
+    }
+  },
+  {
+    speciesId: 'confucius_sage_qilin',
+    rarity: 'SSR',
+    element: 'light',
+    generation: 10,
+    unlockMasteredCount: 3250,
+    eggName: '至聖先師吐書麟蛋',
+    eggStepsRequired: 45,
+    themeColor: '#ca8a04',
+    stages: {
+      baby: { name: '闕里玉書小麟', emoji: '🦌📘', description: '傳說孔子誕生時現身闕里、口吐玉書的至聖瑞麟。', expRequired: 170 },
+      adult: { name: '萬世師表聖麒麟', emoji: '🦄☀️', description: '溫故而知新、學而不厭，象徵語文修行達到登峰造極之境。', expRequired: 360 },
+      awakened: { name: '至聖先師・萬古文宗玉書麒麟皇', emoji: '👑🦄📜', description: '突破 3,250 題解鎖的至聖神獸，萬古文宗、光耀千秋！' }
+    }
+  },
+  {
+    speciesId: 'cangjie_creator_dragon',
+    rarity: 'SSR',
+    element: 'star',
+    generation: 10,
+    unlockMasteredCount: 3350,
+    eggName: '倉頡四目造字神蛋',
+    eggStepsRequired: 45,
+    themeColor: '#9333ea',
+    stages: {
+      baby: { name: '四目造字小靈龍', emoji: '🐲👁️', description: '仰觀奎星圓曲之勢、俯察龜文鳥跡之象，創造出世間第一個漢字。', expRequired: 175 },
+      adult: { name: '天雨粟鬼夜哭聖龍', emoji: '🐉🌠', description: '倉頡造字、驚天動地，將三千四百道字音字形化為創世法則！', expRequired: 370 },
+      awakened: { name: '漢字造物主・倉頡萬字創世神龍皇', emoji: '👑🐉🏆', description: '全題庫 3,457 題完全制霸的終極榮耀象徵！全牧場戰力天花板之頂點！' }
+    }
   }
 ];
 
@@ -540,8 +1035,13 @@ export function getUnlockedSpeciesPool(masteredCount: number): BeastSpecies[] {
   );
 }
 
-/** 取得目前已解鎖的最高世代編號 (1 ~ 5) */
+/** 取得目前已解鎖的最高世代編號 (1 ~ 10) */
 export function getCurrentUnlockedGeneration(masteredCount: number): number {
+  if (masteredCount >= 3000) return 10;
+  if (masteredCount >= 2500) return 9;
+  if (masteredCount >= 2050) return 8;
+  if (masteredCount >= 1650) return 7;
+  if (masteredCount >= 1300) return 6;
   if (masteredCount >= 750) return 5;
   if (masteredCount >= 500) return 4;
   if (masteredCount >= 250) return 3;

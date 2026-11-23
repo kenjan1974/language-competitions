@@ -1,9 +1,9 @@
 # WordRanch PWA 開發進度與 AI Agent 交接表 (PROGRESS.md)
 
 ## 當前整體狀態 (Current Status)
-- **目前階段**：**Phase 10 已完成**（重傷休養取代永久刪除、中途安全撤退、永久圖鑑點亮、3卡槽副將協同加成、錯題本連對次數統一），準備執行 **Phase 11（10 大世代 62 種奇獸擴充、世代戰力階梯與 3,457 題完整里程碑）**
+- **目前階段**：**Phase 10 & Phase 11 已完成**（重傷休養安全機制、10 大世代 62 種奇獸完整擴充、+12%/世代戰力階梯、12 大階段里程碑覆蓋至 3,457 題），準備執行 **Phase 12（圖鑑套卡羈絆系統與重複卡星魂許願池）**
 - **最後更新時間**：2026-11-23
-- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 11` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
+- **下一個 Agent 的首要任務 (Next Immediate Action)**：依照下方 `Phase 12` 檢查表依序實作，每完成一個 Phase 務必執行 `./node_modules/.bin/tsc --noEmit` 驗證零錯誤、更新 `PROGRESS.md` 並執行 `git commit`。
 
 ---
 
@@ -29,14 +29,14 @@
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 11: 10 大世代 62 種奇獸擴充、世代戰力階梯與 3,457 題完整里程碑
-- [ ] **Task 11.1: 擴充至 10 大世代共 62 種奇獸 (`src/data/beasts.ts`)**
+- [x] **Task 11.1: 擴充至 10 大世代共 62 種奇獸 (`src/data/beasts.ts`)**
   - 新增第 6 世代（1,300 題解鎖，山海異獸 6 種）、第 7 世代（1,650 題解鎖，詩詞仙靈 6 種）、第 8 世代（2,050 題解鎖，甲骨聖殿 6 種）、第 9 世代（2,500 題解鎖，星河奧義 6 種）、第 10 世代（3,000~3,300 題解鎖，萬字創世神 6 種），共 62 種奇獸完整三階設定。
   - 更新 `getCurrentUnlockedGeneration` 與 `GENERATION_META` 支援 1 ～ 10 世代。
-- [ ] **Task 11.2: 實作「跨世代戰力階梯 (`Generation CP Multiplier`)」(`src/data/bosses.ts`)**
+- [x] **Task 11.2: 實作「跨世代戰力階梯 (`Generation CP Multiplier`)」(`src/data/bosses.ts`)**
   - 修改 `getSingleBeastPower`：依據奇獸所屬 `generation (1~10)` 提供 `1 + (gen - 1) * 0.12` 世代戰力倍率，讓高世代奇獸擁有顯著更高的戰力天花板。
-- [ ] **Task 11.3: 擴充 12 大階段里程碑（涵蓋 50 題 ～ 3,457 題 100% 制霸）**
+- [x] **Task 11.3: 擴充 12 大階段里程碑（涵蓋 50 題 ～ 3,457 題 100% 制霸）**
   - 在 `src/data/bosses.ts` 的 `MILESTONE_GOALS` 新增 `1300題`、`1650題`、`2050題`、`2500題`、`3000題` 階段大獎與專屬新世代神蛋獎勵。
-- [ ] **Task 11.4: 驗證與 Git Commit**
+- [x] **Task 11.4: 驗證與 Git Commit**
   - 執行 `./node_modules/.bin/tsc --noEmit` 確保零型別錯誤，更新 `PROGRESS.md` 並執行 `git commit`。
 
 ### Phase 12: 圖鑑套卡羈絆系統（Collection Sets）與重複卡「星魂許願池（保底機制）」

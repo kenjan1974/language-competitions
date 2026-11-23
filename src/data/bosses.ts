@@ -7,6 +7,7 @@ import {
   MilestoneGoal,
   Rarity
 } from '../types/game';
+import { BEAST_SPECIES_LIST } from './beasts';
 import { getBeastLevel, getStageForLevel } from '../utils/beastPerks';
 
 /** 五大元素屬性設定與技能名稱（街機卡匣風格） */
@@ -61,7 +62,15 @@ export function getBeastCardStars(stage: BeastStage): number {
   return 0;
 }
 
-/** 計算單張神獸卡匣戰力（結合 ★1/★3/★5 階段與 Lv.1~Lv.6 等級加成） */
+const SPECIES_GENERATION_MAP = new Map<string, number>(
+  BEAST_SPECIES_LIST.map((s) => [s.speciesId, s.generation ?? 1])
+);
+
+/**
+ * 計算單張神獸卡匣戰力（結合 ★1/★3/★5 階段、Lv.1~Lv.6 等級加成、以及 G1~G10 跨世代戰力階梯！）
+ * - 每提升 1 個世代，該奇獸的基礎卡匣戰力享有 +12% 世代威能加成（Gen 1 = 1.0x，Gen 5 = 1.48x，Gen 10 = 2.08x），
+ *   確保越後期解鎖的新世代奇獸擁有顯著更高的戰力天花板，激發玩家不斷推進題庫收集新世代強卡！
+ */
 export function getSingleBeastPower(beast: BeastInstance): number {
   if (beast.stage === 'egg') return 0;
   const level = getBeastLevel(beast);
@@ -69,13 +78,18 @@ export function getSingleBeastPower(beast: BeastInstance): number {
   const row = CARD_POWER_TABLE[beast.rarity];
   if (!row) return 100;
 
-  if (level === 1) return row.baby;
-  if (level === 2) return Math.round((row.baby + (row.adult - row.baby) * 0.35) / 10) * 10;
-  if (level === 3) return row.adult;
-  if (level === 4) return Math.round((row.adult + (row.awakened - row.adult) * 0.35) / 10) * 10;
-  if (level === 5) return row.awakened;
-  if (level >= 6) return Math.round((row.awakened * 1.15) / 10) * 10;
-  return row[stage] ?? 100;
+  let basePower = row[stage] ?? 100;
+  if (level === 1) basePower = row.baby;
+  else if (level === 2) basePower = row.baby + (row.adult - row.baby) * 0.35;
+  else if (level === 3) basePower = row.adult;
+  else if (level === 4) basePower = row.adult + (row.awakened - row.adult) * 0.35;
+  else if (level === 5) basePower = row.awakened;
+  else if (level >= 6) basePower = row.awakened * 1.15;
+
+  const gen = SPECIES_GENERATION_MAP.get(beast.speciesId) ?? 1;
+  const genMultiplier = 1 + Math.max(0, gen - 1) * 0.12;
+
+  return Math.round((basePower * genMultiplier) / 10) * 10;
 }
 
 /** 自動選出最強的 3 張已孵化且在牧場中（未放入倉庫且未重傷）的神獸卡匣作為預設出戰牌組 */
@@ -360,24 +374,80 @@ export const MILESTONE_GOALS: MilestoneGoal[] = [
   },
   {
     milestoneId: 'ms_1000',
-    title: '千字大宗師・1000 題聖殿解鎖（解鎖創世祖龍！）',
+    title: '千字大宗師・1000 題聖殿解鎖（解鎖太初祖龍！）',
     badgeEmoji: '🏛️',
     targetCount: 1000,
-    description: '突破 1,000 題大關！解鎖最終第 5 世代至高神獸 SSR 級【創世太初神蛋】！',
+    description: '突破 1,000 題大關！解鎖第 5 世代至高神獸 SSR 級【創世太初神蛋】！',
     rewardCoins: 1200,
     rewardGems: 70,
     rewardSpeedTickets: 8,
     unlockSpeciesId: 'genesis_creator_dragon'
   },
   {
+    milestoneId: 'ms_1300',
+    title: '山海探秘者・1300 題突破（解鎖第 6 世代山海異獸！）',
+    badgeEmoji: '⛰️',
+    targetCount: 1300,
+    description: '累計通過 1,300 題！開放【第 6 世代 6 種山海經異獸】進入抽蛋池，並獲贈 SSR 級【鍾山燭陰神蛋】！',
+    rewardCoins: 1500,
+    rewardGems: 85,
+    rewardSpeedTickets: 9,
+    unlockSpeciesId: 'zhulong_torch_dragon'
+  },
+  {
+    milestoneId: 'ms_1650',
+    title: '詩詞大劍豪・1650 題突破（解鎖第 7 世代詩詞仙靈！）',
+    badgeEmoji: '📜',
+    targetCount: 1650,
+    description: '累計通過 1,650 題！開放【第 7 世代 6 種唐宋詩詞仙靈】進入抽蛋池，並獲贈 SSR 級【杜陵秋興聖蛋】！',
+    rewardCoins: 1800,
+    rewardGems: 100,
+    rewardSpeedTickets: 10,
+    unlockSpeciesId: 'zimei_autumn_roc'
+  },
+  {
+    milestoneId: 'ms_2050',
+    title: '甲骨大宗師・2050 題突破（解鎖第 8 世代甲骨聖殿！）',
+    badgeEmoji: '🏺',
+    targetCount: 2050,
+    description: '累計通過 2,050 題！開放【第 8 世代 6 種甲骨金文聖獸】進入抽蛋池，並獲贈 SSR 級【莫高窟飛天瑞蛋】！',
+    rewardCoins: 2200,
+    rewardGems: 120,
+    rewardSpeedTickets: 12,
+    unlockSpeciesId: 'dunhuang_apsaras_qilin'
+  },
+  {
+    milestoneId: 'ms_2500',
+    title: '星河領航員・2500 題突破（解鎖第 9 世代星河奧義！）',
+    badgeEmoji: '🌌',
+    targetCount: 2500,
+    description: '累計通過 2,500 題！開放【第 9 世代 6 種星河奧義神獸】進入抽蛋池，並獲贈 SSR 級【紫微帝星紫金蛋】！',
+    rewardCoins: 2600,
+    rewardGems: 140,
+    rewardSpeedTickets: 14,
+    unlockSpeciesId: 'ziwei_emperor_dragon'
+  },
+  {
+    milestoneId: 'ms_3000',
+    title: '三千字聖・3000 題巔峰突破（解鎖第 10 世代萬字創世神！）',
+    badgeEmoji: '👑',
+    targetCount: 3000,
+    description: '突破 3,000 題傳奇大關！開放【第 10 世代 6 種萬字創世至高神獸】，並獲贈 SSR 級【魁星點斗狀元神蛋】！',
+    rewardCoins: 3200,
+    rewardGems: 180,
+    rewardSpeedTickets: 16,
+    unlockSpeciesId: 'kuixing_scholar_qilin'
+  },
+  {
     milestoneId: 'ms_100_percent',
-    title: '🏆 終極目標：100% 全題庫完全制霸！',
+    title: '🏆 終極目標：100% 全題庫（3,457 題）完全制霸！',
     badgeEmoji: '🏆',
     targetCount: -1,
     isFullCompletion: true,
-    description: '將題庫中每一道字音與字形題目全數通過（100%），解鎖最終隱藏魔皇並加冕全國語文競賽大滿貫總冠軍！',
-    rewardCoins: 3000,
-    rewardGems: 150,
-    rewardSpeedTickets: 15
+    description: '將題庫中每一道字音與字形題目全數通過（100%），獲贈終極造物主【倉頡四目造字神蛋】並加冕全國語文競賽大滿貫總冠軍！',
+    rewardCoins: 5000,
+    rewardGems: 300,
+    rewardSpeedTickets: 25,
+    unlockSpeciesId: 'cangjie_creator_dragon'
   }
 ];

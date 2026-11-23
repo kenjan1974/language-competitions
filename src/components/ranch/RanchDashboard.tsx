@@ -2020,11 +2020,11 @@ export const RanchDashboard: React.FC<RanchDashboardProps> = ({
                   <div className="flex items-center gap-2">
                     <Crown className="w-6 h-6 text-sky-600" />
                     <h3 className="text-xl font-extrabold text-slate-800">
-                      神獸卡匣全圖鑑（五大世代共 {BEAST_SPECIES_LIST.length} 種三段升星：★1 ➔ ★3 ➔ ★5）
+                      神獸卡匣全圖鑑（十大世代共 {BEAST_SPECIES_LIST.length} 種三段升星：★1 ➔ ★3 ➔ ★5）
                     </h3>
                   </div>
                   <p className="text-xs text-slate-600 font-semibold mt-1">
-                    每當熟悉通過題數突破 150 題、250 題、500 題、750 題與 1000 題，就會自動解鎖新世代奇獸進入抽蛋池與過關掉蛋！
+                    從 0 題至 3,457 題每突破一階（150/250/500/750/1000/1300/1650/2050/2500/3000題）即解鎖新世代奇獸，且每提升 1 個世代享有 +12% 基礎卡匣戰力加成！
                   </p>
                 </div>
                 <button
